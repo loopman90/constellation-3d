@@ -1,42 +1,61 @@
 # Constellation 3D
 
-Constellation 3D is an Obsidian community-plugin prototype inspired by Constella's graph controls and the supplied video. It turns the current vault's resolved note links into an animated, interactive 3D note space.
+Constellation 3D turns the links between your Obsidian notes into an interactive, animated 3D space. Each note is a node; links between notes are the lines connecting them. Move through the space, follow paths, and spot the folders and notes that shape your knowledge network.
 
-## Current scope
+The plugin reads Obsidian's local note and link metadata. It does not edit your notes or send vault data to a server.
 
-- Global, Local, and Current note graph scopes, with configurable local depth.
-- Search, folder and tag filters, modified-date filters, minimum link count, and floating-note controls.
-- Discovery modes for Wander, Path Journey, Recent Activity, Forgotten Knowledge, Hub Explorer, Hidden Gems, and Orphan Hunt.
-- Automatic note travel plus previous/next navigation; click a note to open it.
-- Right-click notes to pin or hide them, start route previews, or restore hidden notes.
-- Hover a note to highlight its direct neighbors; route previews are highlighted in the graph.
-- 3D animation styles: full-space orbit, folder-cluster orbit, timed cluster tour, drifting notes, and particles traveling along links.
-- Folder cluster colors, with cluster layout based on the top-level folder in each note path.
-- Visual presets, animation and camera speed, cluster visit interval, drift amount, link pulse speed, reduce-motion, glow, node/label size, line thickness, and FPS display.
-- Vault counts and recent local create, edit, and delete activity.
-- Refresh and fit controls, with no remote services or AI-agent claims.
+## What you can do
 
-This prototype does not run or control AI agents. Agent orchestration and external telemetry would need a separately designed integration.
+- **Explore your graph:** switch between the whole vault, notes around the active note, and the active note's direct neighbors. Set how far local exploration reaches.
+- **Find notes:** search by note name, then narrow the graph by folder, tag, last-modified date, or minimum number of connections.
+- **See folders as clusters:** group notes by their top-level folder, color clusters, rotate clusters independently, or let the camera tour them.
+- **Animate the space:** choose 3D orbit, Cluster orbit, Cluster tour, Floating notes, or Link pulses. Adjust camera and animation speed, drift amount, cluster visit time, glow, and motion reduction.
+- **Take a guided journey:** browse recent or forgotten notes, hubs, hidden gems, and orphans. Start automatic travel or move one note at a time.
+- **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a note, or preview a route through linked notes.
+- **Personalize the view:** use visual presets and color schemes, then adjust labels, node size, link thickness, and the FPS display.
 
-## Install for local development
+## Install in Obsidian
 
-Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/constellation-three-d/`, then enable **Constellation 3D** under **Settings → Community plugins**. The plugin is plain JavaScript and needs no build step.
+No coding, terminal, or build tools are needed.
 
-For a visual, step-by-step installation walkthrough, visit the [Constellation 3D installation guide](https://loopman90.github.io/constellation-3d/).
+1. **Download the plugin ZIP.** Click [Download the latest release](https://github.com/loopman90/constellation-3d/releases/latest/download/constellation-3d.zip) and unzip the downloaded file. It contains a folder named `constellation-three-d`.
+2. **Open your vault's plugin folder.** In your file manager, open the folder where your Obsidian vault is stored. Show hidden files if needed, then open `.obsidian`, then `plugins`. If there is no `plugins` folder, create one.
+   - **Mac:** In Finder, press `Command` + `Shift` + `.` to show hidden files.
+   - **Windows:** In File Explorer, choose **View → Show → Hidden items**.
+3. **Install the plugin.** Drag the complete `constellation-three-d` folder from the unzipped download into `.obsidian/plugins`. Do not drag only the files inside it. The final layout must be:
 
-## GitHub Pages
+   ```text
+   Your vault/
+   └── .obsidian/
+       └── plugins/
+           └── constellation-three-d/
+               ├── main.js
+               ├── manifest.json
+               └── styles.css
+   ```
 
-The installation guide lives in `site/` and is deployed from the `main` branch by the workflow in `.github/workflows/pages.yml`. In the repository, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions** once, then future changes to `site/` deploy automatically.
+   If you are updating an existing installation, replace the old `constellation-three-d` folder with the new one.
+4. **Enable it.** Restart Obsidian. Open **Settings → Community plugins**. If **Restricted mode** is enabled, turn it off and confirm. Under **Installed plugins**, turn on **Constellation 3D**.
+5. **Open the graph.** Open the command palette with `Command` + `P` on Mac or `Ctrl` + `P` on Windows. Search for **Open Constellation 3D** and select it. You can also click its orbit icon in the left ribbon.
 
-Every push to `main` automatically increments the patch version in `manifest.json` and `versions.json`, creates a matching Git tag and GitHub Release, and attaches a ready-to-install `constellation-3d.zip`. The bot's version commit does not trigger another release.
+For the illustrated walkthrough and troubleshooting tips, visit the [installation guide](https://loopman90.github.io/constellation-3d/).
 
-## Controls
+### If it does not appear
 
-- Drag to rotate the 3D space.
-- Use the search field, scope selector, and mode selector in the Quick Bar to filter and explore.
-- Use **Start Travel**, **‹**, and **›** for automatic and manual note journeys.
-- Click a note to open it. Right-click for pin, hide, or route-preview actions.
-- Open **Settings → Constellation 3D** for the Graph, Visual, Motion, Discovery, Journey, and Display sections.
-- In **Motion**, choose a 3D animation style. Cluster modes group notes by their top-level folder; Cluster tour moves the camera between those groups.
+- Check that the folder is named exactly `constellation-three-d` and that `manifest.json` is directly inside it, not one folder deeper.
+- Confirm that you copied it into the `.obsidian/plugins` folder for the vault you currently have open.
+- Restart Obsidian, then check **Settings → Community plugins → Installed plugins** again.
+- If the graph is empty, link notes with Obsidian's `[[double brackets]]` syntax and press **Refresh** in Constellation 3D.
 
-Settings are stored locally by Obsidian. The graph reads vault metadata and does not modify notes or send data to a remote service.
+## Controls and settings
+
+- Drag to rotate the 3D space; use search, scope, and discovery mode in the Quick Bar.
+- Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
+- Click a node to open the note. Right-click for pin, hide, and route-preview actions.
+- Open **Settings → Constellation 3D** to adjust Graph, Visual, Motion, Discovery, Journey, and Display settings.
+
+## Releases and development
+
+Every push to `main` automatically increments the patch version in `manifest.json` and `versions.json`, creates a matching Git tag and GitHub Release, and attaches a ready-to-install ZIP. The bot's version commit does not trigger another release.
+
+The installation guide is in `site/` and deploys through `.github/workflows/pages.yml`. The plugin is plain JavaScript and requires no build step.

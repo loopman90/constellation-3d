@@ -77,7 +77,10 @@ jobs:
           git push origin "${VERSION}"
 
       - name: Package plugin files
-        run: zip -j constellation-3d.zip main.js manifest.json styles.css
+        run: |
+          mkdir -p package/constellation-three-d
+          cp main.js manifest.json styles.css package/constellation-three-d/
+          (cd package && zip -r ../constellation-3d.zip constellation-three-d)
 
       - name: Publish GitHub release
         env:

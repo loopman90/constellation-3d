@@ -22,6 +22,12 @@
     .button.primary { color:#071313; background:var(--cyan); border-color:var(--cyan) }
     main { padding-bottom:70px }
     .notice { padding:16px 18px; border:1px solid #514a76; border-radius:12px; background:#17152a; color:#ddd8ff; margin:0 0 28px }
+    .about { margin:0 0 34px }
+    .about > p { max-width:760px; margin-bottom:18px }
+    .feature-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+    .feature { padding:17px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
+    .feature h3 { margin:0 0 6px; font-size:1rem }
+    .feature p { font-size:.94rem }
     .steps { display:grid; gap:14px; counter-reset:step }
     .step { position:relative; padding:22px 24px 22px 76px; background:var(--panel); border:1px solid var(--line); border-radius:15px; counter-increment:step }
     .step:before { content:counter(step); position:absolute; left:22px; top:22px; display:grid; place-items:center; width:36px; height:36px; border:1px solid #4e5772; border-radius:50%; color:var(--cyan); font-weight:800 }
@@ -34,7 +40,8 @@
     details { margin-top:26px; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:12px }
     summary { cursor:pointer; font-weight:700 }
     footer { border-top:1px solid var(--line); padding:22px 0 34px; color:var(--muted); font-size:.9rem }
-    @media(max-width:600px) { header{padding-top:48px}.step{padding:18px 16px 18px 62px}.step:before{left:15px;top:18px}.platforms{grid-template-columns:1fr} }
+    @media(max-width:720px) { .feature-grid{grid-template-columns:repeat(2,1fr)} }
+    @media(max-width:600px) { header{padding-top:48px}.step{padding:18px 16px 18px 62px}.step:before{left:15px;top:18px}.platforms,.feature-grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -50,30 +57,41 @@
   </header>
   <main class="wrap">
     <div class="notice"><strong>Before you start:</strong> This is an early community plugin. It is not yet listed in Obsidian's Community Plugins browser, so install it manually below.</div>
+    <section class="about" aria-labelledby="about-title">
+      <h2 id="about-title">What is Constellation 3D?</h2>
+      <p>Constellation 3D turns the links in your Obsidian vault into an interactive, animated 3D map. Notes appear as stars and their links as connecting paths, so you can explore how ideas relate and find parts of your vault you may have forgotten. Your notes stay on your device: the plugin reads local note and link information and does not edit or upload your notes.</p>
+      <div class="feature-grid">
+        <article class="feature"><h3>Explore your note network</h3><p>View your whole vault, the notes around the current note, or its direct neighbors. Search notes and filter by folder, tag, date, or connection count.</p></article>
+        <article class="feature"><h3>Move through 3D</h3><p>Rotate and zoom the space, open notes from their nodes, and follow highlighted connections between related notes.</p></article>
+        <article class="feature"><h3>Animate folder clusters</h3><p>Group notes by folder and choose 3D Orbit, Cluster Orbit, Cluster Tour, Floating Notes, or Link Pulses. Tune speed, drift, glow, and reduced motion.</p></article>
+        <article class="feature"><h3>Discover notes</h3><p>Browse recent or forgotten notes, hubs, hidden gems, and orphans. Let the camera travel automatically or step through one note at a time.</p></article>
+        <article class="feature"><h3>Pin, hide, and preview routes</h3><p>Keep important nodes in place, hide distracting ones, and preview a route through linked notes.</p></article>
+        <article class="feature"><h3>Make it yours</h3><p>Pick visual presets and color schemes, then adjust labels, node size, link thickness, and the FPS display.</p></article>
+      </div>
+    </section>
     <section aria-label="Installation steps" class="steps">
       <article class="step">
         <h2>Download the plugin</h2>
-        <p>Click <strong>Download latest plugin</strong> at the top of this page. Open the downloaded <code>constellation-3d.zip</code> file to unzip it. You should see <code>main.js</code>, <code>manifest.json</code>, and <code>styles.css</code>.</p>
+        <p>Click <strong>Download latest plugin</strong> at the top of this page. Open the downloaded <code>constellation-3d.zip</code> file to unzip it. You will get one folder named <code>constellation-three-d</code>.</p>
       </article>
       <article class="step">
         <h2>Open your vault's plugins folder</h2>
-        <p>Open the folder where your Obsidian vault is stored. Inside it, open <code>.obsidian</code>, then <code>plugins</code>. If <code>plugins</code> is missing, create that folder.</p>
+        <p>Open the folder where your Obsidian vault is stored. Inside it, open <code>.obsidian</code>, then <code>plugins</code>. If <code>.obsidian</code> or <code>plugins</code> is missing, open Obsidian for this vault once and check again. If <code>plugins</code> is still missing, create a folder named exactly <code>plugins</code> inside <code>.obsidian</code>.</p>
         <div class="platforms">
           <div class="platform"><h3>On a Mac</h3><p>In Finder, open your vault folder and press <kbd>Command</kbd> + <kbd>Shift</kbd> + <kbd>.</kbd> to show hidden folders.</p></div>
           <div class="platform"><h3>On Windows</h3><p>In File Explorer, open your vault folder. Select <strong>View → Show → Hidden items</strong>.</p></div>
         </div>
       </article>
       <article class="step">
-        <h2>Put the plugin files in the right place</h2>
-        <p>From the unzipped download, copy these three files into a new folder named <code>constellation-three-d</code> inside <code>.obsidian/plugins</code>:</p>
-        <p><code>main.js</code> &nbsp; <code>manifest.json</code> &nbsp; <code>styles.css</code></p>
+        <h2>Install the plugin folder</h2>
+        <p>Drag the complete <code>constellation-three-d</code> folder from the unzipped download into <code>.obsidian/plugins</code>. Do not make another folder around it and do not drag only the files inside it.</p>
         <p>Your final folder should look exactly like this:</p>
         <p><code>Your vault/.obsidian/plugins/constellation-three-d/main.js</code><br><code>Your vault/.obsidian/plugins/constellation-three-d/manifest.json</code><br><code>Your vault/.obsidian/plugins/constellation-three-d/styles.css</code></p>
-        <p>Do not leave the files buried inside another nested project folder.</p>
+        <p><strong>Check this carefully:</strong> <code>manifest.json</code> must be directly inside <code>constellation-three-d</code>. If you see <code>constellation-three-d/constellation-three-d/manifest.json</code>, remove the extra inner folder level.</p>
       </article>
       <article class="step">
         <h2>Turn it on in Obsidian</h2>
-        <p>In Obsidian, open <strong>Settings → Community plugins</strong>. If Restricted mode is on, turn it off and confirm. Under <strong>Installed plugins</strong>, find <strong>Constellation 3D</strong> and switch it on.</p>
+        <p>Restart Obsidian. Open <strong>Settings → Community plugins</strong>. If Restricted mode is on, turn it off and confirm. Under <strong>Installed plugins</strong>, find <strong>Constellation 3D</strong> and switch it on.</p>
       </article>
       <article class="step">
         <h2>Open your 3D note space</h2>
@@ -82,7 +100,7 @@
     </section>
     <details>
       <summary>Something went wrong?</summary>
-      <p><strong>Constellation 3D is not listed?</strong> Confirm that the folder is named <code>constellation-three-d</code> and that <code>manifest.json</code> is directly inside it. Then restart Obsidian.</p>
+      <p><strong>Constellation 3D is not listed?</strong> Confirm the path ends in <code>.obsidian/plugins/constellation-three-d/manifest.json</code> (with only one <code>constellation-three-d</code> folder), then restart Obsidian.</p>
       <p><strong>The graph is empty?</strong> Add links between notes using Obsidian's <code>[[double brackets]]</code>, then click Refresh in Constellation 3D.</p>
       <p><strong>Still stuck?</strong> Open an issue on <a href="https://github.com/loopman90/constellation-3d/issues">GitHub</a> and include your operating system and Obsidian version.</p>
     </details>
