@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS = {
 		minimumConnections: 0,
 		includeFloatingNotes: true,
 		clusterBy: 'top-level',
+		clusterSpacing: 1,
+		noteSpacing: 1,
 	},
 	motion: {
 		animationEnabled: true,
@@ -330,23 +332,23 @@ class SwarmGraphView extends ItemView {
 			if (this.plugin.settings.visual === 'timeline-map') {
 				const timeRange = Math.max(1, newestNoteTime - oldestNoteTime);
 				const progress = (file.stat.mtime - oldestNoteTime) / timeRange;
-				x = progress * 2.5 - 1.25;
-				y = ((clusterId - (clusterKeys.length - 1) / 2) * 0.12) + Math.sin(index * 1.7) * 0.035;
-				z = Math.min(degree.get(file.path) || 0, 12) * 0.012;
+				x = (progress * 2.5 - 1.25) * graphSettings.noteSpacing;
+				y = (((clusterId - (clusterKeys.length - 1) / 2) * 0.12 * graphSettings.clusterSpacing) + Math.sin(index * 1.7) * 0.035) * graphSettings.noteSpacing;
+				z = Math.min(degree.get(file.path) || 0, 12) * 0.012 * graphSettings.noteSpacing;
 			} else if (animationStyle === 'cluster-orbit' || animationStyle === 'cluster-tour' || this.plugin.settings.visual === 'mind-palace') {
 				const totalClusters = Math.max(clusterKeys.length, 1);
 				const centerY = 1 - ((clusterId + 0.5) / totalClusters) * 2;
 				const centerRing = Math.sqrt(Math.max(0, 1 - centerY * centerY));
 				const centerAngle = clusterId * Math.PI * (3 - Math.sqrt(5));
-				clusterCenterX = Math.cos(centerAngle) * centerRing * 0.46;
-				clusterCenterY = centerY * 0.46;
-				clusterCenterZ = Math.sin(centerAngle) * centerRing * 0.46;
+				clusterCenterX = Math.cos(centerAngle) * centerRing * 0.46 * graphSettings.clusterSpacing;
+				clusterCenterY = centerY * 0.46 * graphSettings.clusterSpacing;
+				clusterCenterZ = Math.sin(centerAngle) * centerRing * 0.46 * graphSettings.clusterSpacing;
 				const members = clusterMembers.get(clusterName) || [];
 				const localIndex = members.findIndex((member) => member.path === file.path);
 				const localY = 1 - ((localIndex + 0.5) / Math.max(members.length, 1)) * 2;
 				const localRing = Math.sqrt(Math.max(0, 1 - localY * localY));
 				const localAngle = localIndex * Math.PI * (3 - Math.sqrt(5));
-				const localRadius = Math.min(0.2, 0.09 + members.length * 0.004);
+				const localRadius = Math.min(0.2, 0.09 + members.length * 0.004) * graphSettings.noteSpacing;
 				x = clusterCenterX + Math.cos(localAngle) * localRing * localRadius;
 				y = clusterCenterY + localY * localRadius;
 				z = clusterCenterZ + Math.sin(localAngle) * localRing * localRadius;
@@ -355,7 +357,7 @@ class SwarmGraphView extends ItemView {
 				y = 1 - (index / Math.max(count - 1, 1)) * 2;
 				const ring = Math.sqrt(Math.max(0, 1 - y * y));
 				const angle = index * Math.PI * (3 - Math.sqrt(5));
-				const radius = 0.58 + Math.min(degree.get(file.path) || 0, 12) * 0.018;
+				const radius = (0.58 + Math.min(degree.get(file.path) || 0, 12) * 0.018) * graphSettings.noteSpacing;
 				x = Math.cos(angle) * ring * radius;
 				y *= radius;
 				z = Math.sin(angle) * ring * radius;
@@ -1080,6 +1082,8 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(containerEl, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
 		this.toggle(containerEl, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(containerEl, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
+		this.slider(containerEl, 'Cluster spacing', 'Set how far apart folder clusters sit in Cluster orbit, Cluster tour, Mind Palace, and Timeline Map layouts.', 'graph', 'clusterSpacing', 0.5, 2.5, 0.1, true);
+		this.slider(containerEl, 'Note spacing', 'Spread notes farther apart or bring them closer together across the 3D layouts.', 'graph', 'noteSpacing', 0.5, 2.5, 0.1, true);
 		this.section(containerEl, 'Visual');
 		this.dropdown(containerEl, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
 			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
