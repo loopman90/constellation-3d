@@ -1147,8 +1147,8 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(containerEl, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
 		this.toggle(containerEl, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(containerEl, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
-		this.slider(containerEl, 'Cluster spacing', 'Set how far apart folder clusters sit in Cluster orbit, Cluster tour, Mind Palace, and Timeline Map layouts.', 'graph', 'clusterSpacing', 0.5, 2.5, 0.1, true);
-		this.slider(containerEl, 'Note spacing', 'Spread notes farther apart or bring them closer together across the 3D layouts.', 'graph', 'noteSpacing', 0.5, 2.5, 0.1, true);
+		this.slider(containerEl, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6× in Cluster orbit, Cluster tour, Mind Palace, and Timeline Map layouts. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
+		this.slider(containerEl, 'Note spacing', 'Spread notes farther apart or bring them closer together across the 3D layouts (0.1× to 6×). Zoom out to fit widely spaced notes on screen.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
 		this.section(containerEl, 'Visual');
 		this.dropdown(containerEl, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
 			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
