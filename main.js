@@ -151,6 +151,8 @@ class SwarmGraphView extends ItemView {
 		this.animation = 0;
 		this.rotation = 0;
 		this.tiltOffset = 0;
+		this.zoom = 1;
+		this.manualCameraControl = false;
 		this.dragPoint = null;
 		this.dragMoved = false;
 		this.dragNode = null;
@@ -281,6 +283,7 @@ class SwarmGraphView extends ItemView {
 		closePanelButton.addEventListener('click', () => this.toggleControlPanel(false));
 		this.controlPanelBody = this.controlPanel.createDiv({ cls: 'swarm-control-panel-body' });
 		this.controlSettings = new SwarmConsoleSettingTab(this.app, this.plugin);
+		this.controlSettings.renderCameraControls(this.controlPanelBody, this);
 		this.controlSettings.renderSettings(this.controlPanelBody);
 		this.updateControlLabels();
 		this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
@@ -297,6 +300,7 @@ class SwarmGraphView extends ItemView {
 		this.canvas.addEventListener('wheel', (event) => {
 			event.preventDefault();
 			this.zoom = Math.max(0.1, Math.min(12, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
+			this.controlSettings?.syncCameraControls();
 			this.scheduleDraw();
 		}, { passive: false });
 		this.canvas.addEventListener('click', (event) => this.onCanvasClick(event));
@@ -556,7 +560,6 @@ class SwarmGraphView extends ItemView {
 		this.renderEdges = this.edges.length > 12000
 			? [...this.edges].sort((a, b) => b.count - a.count).slice(0, 12000)
 			: this.edges;
-		this.zoom = 1;
 		this.nodeCount?.setText(String(this.nodes.length));
 		this.edgeCount?.setText(String(this.edges.length));
 		this.updateMetrics(files);
@@ -649,14 +652,16 @@ class SwarmGraphView extends ItemView {
 		this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
 		this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
 		this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
-		this.fitNetwork();
+		this.scheduleDraw();
 	}
 
 	fitNetwork() {
 		this.zoom = 1;
 		this.panX = 0; this.panY = 0;
 		this.rotation = 0; this.tiltOffset = 0;
+		this.manualCameraControl = false;
 		this.scheduleDraw();
+		this.controlSettings?.syncCameraControls();
 	}
 
 	optimizeView() {
@@ -681,6 +686,7 @@ class SwarmGraphView extends ItemView {
 		this.panX = (this.panX + width / 2 - centerX) * appliedScale;
 		this.panY = (this.panY + height / 2 - centerY) * appliedScale;
 		this.scheduleDraw();
+		this.controlSettings?.syncCameraControls();
 		new Notice('View optimized to fit visible notes.');
 	}
 
@@ -695,9 +701,9 @@ class SwarmGraphView extends ItemView {
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
 		this.drawBackground(ctx, width, height, motion);
 		const timelineMode = this.plugin.settings.visual === 'timeline-map';
-		const animatedSpin = timelineMode ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
-		let focusedNode = this.nodeByPath.get(this.focusedPath);
-		if (!focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
+		const animatedSpin = timelineMode || this.manualCameraControl ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
+		let focusedNode = this.manualCameraControl ? null : this.nodeByPath.get(this.focusedPath);
+		if (!this.manualCameraControl && !focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
 			const clusters = [...new Map(this.nodes.map((node) => [node.clusterName, node])).values()].sort((a, b) => a.clusterId - b.clusterId);
 			const pause = Math.max(1, motion.clusterPauseSeconds) * 1000;
 			const activeCluster = clusters[Math.floor(Date.now() / pause) % clusters.length];
@@ -706,7 +712,7 @@ class SwarmGraphView extends ItemView {
 		if (focusedNode) {
 			const yaw = Math.atan2(focusedNode.x, focusedNode.z) - animatedSpin;
 			const pitch = Math.atan2(focusedNode.y, Math.hypot(focusedNode.x, focusedNode.z));
-			const naturalTilt = motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0;
+			const naturalTilt = !this.manualCameraControl && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0;
 			if (motion.animationEnabled) {
 				this.rotation += Math.atan2(Math.sin(yaw - this.rotation), Math.cos(yaw - this.rotation)) * 0.045;
 				this.tiltOffset += (pitch - naturalTilt - this.tiltOffset) * 0.045;
@@ -716,7 +722,7 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		const spin = this.rotation + animatedSpin;
-		const tilt = this.tiltOffset + (!timelineMode && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
+		const tilt = this.tiltOffset + (!this.manualCameraControl && !timelineMode && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
 		const radius = (timelineMode ? width * 0.37 : Math.min(width, height) * (motion.reduceMotion ? 0.34 : 0.39)) * (this.zoom || 1);
 		const focalLength = 4.5 - motion.perspectiveStrength * 1.3;
 		if (this.plugin.settings.visual === 'timeline-map') this.drawTimelineAxis(ctx, width, height);
@@ -1182,6 +1188,7 @@ class SwarmGraphView extends ItemView {
 				this.rotation += dx * 0.006;
 				this.tiltOffset = Math.max(-0.9, Math.min(0.9, this.tiltOffset + dy * 0.004));
 			}
+			this.controlSettings?.syncCameraControls();
 			this.dragPoint = { x: event.clientX, y: event.clientY };
 			this.canvas.style.cursor = this.dragNode ? 'move' : 'grabbing';
 			this.scheduleDraw();
@@ -1307,6 +1314,57 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 		containerEl.createEl('h2', { text: 'Constellation 3D' });
 		this.renderSettings(containerEl);
+	}
+
+	renderCameraControls(containerEl, view) {
+		this.cameraView = view;
+		this.section(containerEl, 'Camera');
+		containerEl.createEl('p', { text: 'Adjust the viewing angle and zoom. Manual angle controls pause automatic camera turning until you resume it or reset the camera.' });
+		new Setting(containerEl).setName('Horizontal rotation').setDesc('Turn the camera around the note space.').addSlider((slider) => {
+			this.cameraRotationSlider = slider;
+			slider.setLimits(0, 359, 1).setValue(this.rotationDegrees()).setDynamicTooltip().onChange((value) => {
+				view.manualCameraControl = true;
+				view.rotation = value * Math.PI / 180;
+				view.scheduleDraw();
+			});
+		});
+		new Setting(containerEl).setName('Vertical angle').setDesc('Tilt the camera up or down.').addSlider((slider) => {
+			this.cameraTiltSlider = slider;
+			slider.setLimits(-55, 55, 1).setValue(Math.round(view.tiltOffset * 180 / Math.PI)).setDynamicTooltip().onChange((value) => {
+				view.manualCameraControl = true;
+				view.tiltOffset = value * Math.PI / 180;
+				view.scheduleDraw();
+			});
+		});
+		new Setting(containerEl).setName('Zoom').setDesc('Set the camera zoom from 0.1× to 12×.').addSlider((slider) => {
+			this.cameraZoomSlider = slider;
+			slider.setLimits(0.1, 12, 0.1).setValue(view.zoom).setDynamicTooltip().onChange((value) => {
+				view.zoom = value;
+				view.scheduleDraw();
+			});
+		});
+		new Setting(containerEl).addButton((button) => button
+			.setButtonText('Resume automatic camera')
+			.onClick(() => {
+				view.manualCameraControl = false;
+				view.scheduleDraw();
+			}));
+		new Setting(containerEl).addButton((button) => button
+			.setButtonText('Reset camera')
+			.setCta()
+			.onClick(() => view.fitNetwork()));
+	}
+
+	rotationDegrees() {
+		const degrees = this.cameraView.rotation * 180 / Math.PI;
+		return Math.round((degrees % 360 + 360) % 360);
+	}
+
+	syncCameraControls() {
+		if (!this.cameraView) return;
+		this.cameraRotationSlider?.setValue(this.rotationDegrees());
+		this.cameraTiltSlider?.setValue(Math.round(this.cameraView.tiltOffset * 180 / Math.PI));
+		this.cameraZoomSlider?.setValue(this.cameraView.zoom);
 	}
 
 	renderSettings(containerEl) {
