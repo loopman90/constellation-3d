@@ -28,6 +28,8 @@ For a visual, step-by-step installation walkthrough, visit the [Constellation 3D
 
 The installation guide lives in `site/` and is deployed from the `main` branch by the workflow in `.github/workflows/pages.yml`. In the repository, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions** once, then future changes to `site/` deploy automatically.
 
+Every push to `main` automatically increments the patch version in `manifest.json` and `versions.json`, creates a matching Git tag and GitHub Release, and attaches a ready-to-install `constellation-3d.zip`. The bot's version commit does not trigger another release.
+
 ## Controls
 
 - Drag to rotate the 3D space.
