@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b13">
+  <meta name="description" content="Install Constellation 3D, an animated 3D map of your Obsidian notes.">
+  <title>Constellation 3D — Install guide</title>
+  <style>
+    :root { color-scheme: dark; --bg:#090b13; --panel:#111522; --line:#252b3c; --text:#f4f6ff; --muted:#a8b0c8; --cyan:#76e5e2; --purple:#a99aff; }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(ellipse at 80% 0%,#242044 0,transparent 40%),var(--bg); color:var(--text); font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    a { color:var(--cyan) }
+    .wrap { width:min(980px,calc(100% - 36px)); margin:auto }
+    header { padding:76px 0 48px }
+    .eyebrow { color:var(--cyan); text-transform:uppercase; letter-spacing:.18em; font-size:.78rem; font-weight:700 }
+    h1 { margin:.35rem 0; font-size:clamp(2.6rem,8vw,5.5rem); letter-spacing:-.065em; line-height:1.03 }
+    h1 span { color:var(--purple) }
+    header p { max-width:650px; color:var(--muted); font-size:1.15rem }
+    .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:26px }
+    .button { padding:11px 16px; border-radius:10px; border:1px solid var(--line); text-decoration:none; font-weight:700; background:#151a29 }
+    .button.primary { color:#071313; background:var(--cyan); border-color:var(--cyan) }
+    main { padding-bottom:70px }
+    .notice { padding:16px 18px; border:1px solid #514a76; border-radius:12px; background:#17152a; color:#ddd8ff; margin:0 0 28px }
+    .steps { display:grid; gap:14px; counter-reset:step }
+    .step { position:relative; padding:22px 24px 22px 76px; background:var(--panel); border:1px solid var(--line); border-radius:15px; counter-increment:step }
+    .step:before { content:counter(step); position:absolute; left:22px; top:22px; display:grid; place-items:center; width:36px; height:36px; border:1px solid #4e5772; border-radius:50%; color:var(--cyan); font-weight:800 }
+    h2 { margin:0 0 8px; font-size:1.22rem }
+    p { margin:6px 0; color:var(--muted) }
+    kbd,code { background:#080a11; border:1px solid var(--line); border-radius:6px; padding:2px 6px; color:#e5eaff; font: .9em ui-monospace,SFMono-Regular,Menlo,monospace }
+    .platforms { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px }
+    .platform { padding:17px; border:1px solid var(--line); border-radius:12px; background:#0d1019 }
+    .platform h3 { margin:0 0 7px; font-size:1rem }
+    details { margin-top:26px; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:12px }
+    summary { cursor:pointer; font-weight:700 }
+    footer { border-top:1px solid var(--line); padding:22px 0 34px; color:var(--muted); font-size:.9rem }
+    @media(max-width:600px) { header{padding-top:48px}.step{padding:18px 16px 18px 62px}.step:before{left:15px;top:18px}.platforms{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <div class="eyebrow">A 3D note space for Obsidian</div>
+    <h1>Constellation <span>3D</span></h1>
+    <p>See how your notes connect, travel through your vault, and explore folders as moving constellations. Follow these steps once; no coding or build tools required.</p>
+    <div class="actions">
+      <a class="button primary" href="https://github.com/loopman90/constellation-3d">Get the plugin files</a>
+      <a class="button" href="https://github.com/loopman90/constellation-3d/issues">Need help?</a>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="notice"><strong>Before you start:</strong> This is an early community plugin. It is not yet listed in Obsidian's Community Plugins browser, so install it manually below.</div>
+    <section aria-label="Installation steps" class="steps">
+      <article class="step">
+        <h2>Download the plugin</h2>
+        <p>On the project page, click the green <strong>Code</strong> button, then choose <strong>Download ZIP</strong>. Find the downloaded ZIP file and unzip it.</p>
+      </article>
+      <article class="step">
+        <h2>Open your vault's plugins folder</h2>
+        <p>Open the folder where your Obsidian vault is stored. Inside it, open <code>.obsidian</code>, then <code>plugins</code>. If <code>plugins</code> is missing, create that folder.</p>
+        <div class="platforms">
+          <div class="platform"><h3>On a Mac</h3><p>In Finder, open your vault folder and press <kbd>Command</kbd> + <kbd>Shift</kbd> + <kbd>.</kbd> to show hidden folders.</p></div>
+          <div class="platform"><h3>On Windows</h3><p>In File Explorer, open your vault folder. Select <strong>View → Show → Hidden items</strong>.</p></div>
+        </div>
+      </article>
+      <article class="step">
+        <h2>Put the plugin files in the right place</h2>
+        <p>From the unzipped download, open the project folder. Copy these three files into a new folder named <code>constellation-3d</code> inside <code>.obsidian/plugins</code>:</p>
+        <p><code>main.js</code> &nbsp; <code>manifest.json</code> &nbsp; <code>styles.css</code></p>
+        <p>Your final folder should look exactly like this:</p>
+        <p><code>Your vault/.obsidian/plugins/constellation-3d/main.js</code><br><code>Your vault/.obsidian/plugins/constellation-3d/manifest.json</code><br><code>Your vault/.obsidian/plugins/constellation-3d/styles.css</code></p>
+        <p>Do not leave the files buried inside another nested project folder.</p>
+      </article>
+      <article class="step">
+        <h2>Turn it on in Obsidian</h2>
+        <p>In Obsidian, open <strong>Settings → Community plugins</strong>. If Restricted mode is on, turn it off and confirm. Under <strong>Installed plugins</strong>, find <strong>Constellation 3D</strong> and switch it on.</p>
+      </article>
+      <article class="step">
+        <h2>Open your 3D note space</h2>
+        <p>Press <kbd>Command</kbd>/<kbd>Ctrl</kbd> + <kbd>P</kbd> to open the command palette, search for <strong>Open Constellation 3D</strong>, and select it. You can also use the orbit icon in the left ribbon.</p>
+      </article>
+    </section>
+    <details>
+      <summary>Something went wrong?</summary>
+      <p><strong>Constellation 3D is not listed?</strong> Confirm that the folder is named <code>constellation-3d</code> and that <code>manifest.json</code> is directly inside it. Then restart Obsidian.</p>
+      <p><strong>The graph is empty?</strong> Add links between notes using Obsidian's <code>[[double brackets]]</code>, then click Refresh in Constellation 3D.</p>
+      <p><strong>Still stuck?</strong> Open an issue on <a href="https://github.com/loopman90/constellation-3d/issues">GitHub</a> and include your operating system and Obsidian version.</p>
+    </details>
+  </main>
+  <footer><div class="wrap">Constellation 3D is a community plugin. Your notes stay in your vault; the plugin does not send them to a server.</div></footer>
+</body>
+</html>
