@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS = {
 		showNodeIcons: false,
 		showDepthLayers: true,
 		showClusterHalos: true,
+		showVaultNotesCounter: true,
 	},
 	discovery: {
 		recentDays: 30,
@@ -145,6 +146,7 @@ class SwarmGraphView extends ItemView {
 
 		const main = this.root.createDiv({ cls: 'swarm-main' });
 		const quickbar = main.createDiv({ cls: 'swarm-quickbar' });
+		this.quickbar = quickbar;
 		this.searchInput = quickbar.createEl('input', { cls: 'swarm-search', attr: { type: 'search', placeholder: 'Search notes…', 'aria-label': 'Search notes' } });
 		this.searchInput.addEventListener('input', () => {
 			this.searchQuery = this.searchInput.value.trim().toLowerCase();
@@ -178,6 +180,12 @@ class SwarmGraphView extends ItemView {
 			this.panButton.setText(this.panMode ? 'PAN MODE' : 'ORBIT MODE');
 			this.panButton.setAttribute('aria-pressed', String(this.panMode));
 		});
+		this.hideQuickbarButton = quickbar.createEl('button', { cls: 'swarm-control-button', text: 'HIDE QUICK MENU' });
+		this.hideQuickbarButton.setAttribute('aria-label', 'Hide quick menu');
+		this.hideQuickbarButton.addEventListener('click', () => this.setQuickbarVisible(false));
+		this.showQuickbarButton = main.createEl('button', { cls: 'swarm-control-button swarm-show-menu is-hidden', text: 'SHOW QUICK MENU' });
+		this.showQuickbarButton.setAttribute('aria-label', 'Show quick menu');
+		this.showQuickbarButton.addEventListener('click', () => this.setQuickbarVisible(true));
 		this.canvas = main.createEl('canvas', { cls: 'swarm-canvas' });
 		this.ctx = this.canvas.getContext('2d');
 		this.tooltip = main.createDiv({ cls: 'swarm-tooltip' });
@@ -217,11 +225,24 @@ class SwarmGraphView extends ItemView {
 		this.canvas.addEventListener('contextmenu', (event) => this.onCanvasContextMenu(event));
 
 		const footer = this.root.createDiv({ cls: 'swarm-footer' });
-		this.makeMetric(footer, 'VAULT NOTES', 'metric-notes');
+		this.footer = footer;
+		this.vaultNotesMetric = this.makeMetric(footer, 'VAULT NOTES', 'metric-notes');
 		this.makeMetric(footer, 'LINKED NOTES', 'metric-linked');
 		this.makeMetric(footer, 'FOLDERS', 'metric-folders');
 		this.makeMetric(footer, 'RECENT ACTIVITY', 'metric-activity');
 		this.makeActivityPanel(footer);
+		this.updateVaultNotesCounterVisibility();
+	}
+
+	setQuickbarVisible(visible) {
+		this.quickbar?.toggleClass('is-hidden', !visible);
+		this.showQuickbarButton?.toggleClass('is-hidden', visible);
+	}
+
+	updateVaultNotesCounterVisibility() {
+		const visible = this.plugin.settings.display.showVaultNotesCounter;
+		this.vaultNotesMetric?.toggleClass('is-hidden', !visible);
+		this.footer?.toggleClass('without-vault-notes', !visible);
 	}
 
 	makeMetric(parent, label, key) {
@@ -841,6 +862,7 @@ class SwarmGraphView extends ItemView {
 
 	applySettings() {
 		this.updateControlLabels();
+		this.updateVaultNotesCounterVisibility();
 		if (this.scopeSelect) this.scopeSelect.value = this.plugin.settings.graph.scope;
 		if (this.modeSelect) this.modeSelect.value = this.plugin.settings.mode;
 		this.scheduleDraw();
@@ -1126,6 +1148,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(containerEl, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
 		this.toggle(containerEl, 'Depth layers', 'Draw subtle guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
 		this.toggle(containerEl, 'Cluster halos', 'Draw a soft boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
+		this.toggle(containerEl, 'Vault note counter', 'Show or hide the Vault Notes counter in the bottom metrics panel.', 'display', 'showVaultNotesCounter');
 		this.toggle(containerEl, 'FPS indicator', 'Show the current rendering rate in the header.', 'display', 'showFps');
 		this.slider(containerEl, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(containerEl, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);

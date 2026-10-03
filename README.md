@@ -14,6 +14,7 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 - **Take a guided journey:** browse recent or forgotten notes, hubs, hidden gems, and orphans. Start automatic travel or move one note at a time.
 - **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a note, or preview a route through linked notes.
 - **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, depth guide rings, cluster halos, node size, link thickness, and the FPS display.
+- **Keep the view uncluttered:** hide or show the Quick Menu with its button, and turn the bottom Vault Notes counter on or off in Display settings.
 - **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view.
 
 ## Install in Obsidian
