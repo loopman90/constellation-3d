@@ -227,6 +227,13 @@ class SwarmGraphView extends ItemView {
 		}
 		this.modeSelect.value = this.plugin.settings.mode;
 		this.modeSelect.addEventListener('change', () => this.plugin.setSetting(null, 'mode', this.modeSelect.value, true));
+		this.animationStyleSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-animation-style-select', attr: { 'aria-label': 'Note animation style' } });
+		for (const [value, label] of [['orbit', '3D Camera Orbit'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes']]) {
+			this.animationStyleSelect.createEl('option', { value, text: label });
+		}
+		this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
+		this.animationStyleSelect.title = 'Choose how notes or the camera move. Selecting a mode enables animation. Reduce Motion pauses Moving Notes and Notes Orbit Clusters.';
+		this.animationStyleSelect.addEventListener('change', () => this.plugin.setAnimationStyle(this.animationStyleSelect.value));
 		this.colorSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-color-select', attr: { 'aria-label': 'Color scheme' } });
 		for (const [value, label] of Object.entries(COLOR_SCHEME_OPTIONS)) this.colorSelect.createEl('option', { value, text: label });
 		this.colorSelect.value = this.plugin.settings.colors;
@@ -567,6 +574,8 @@ class SwarmGraphView extends ItemView {
 		this.controlSettings?.refreshVisibilityManager();
 		if (this.scopeSelect) this.scopeSelect.value = graphSettings.scope;
 		if (this.modeSelect) this.modeSelect.value = mode;
+		if (this.animationStyleSelect) this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
+		this.updateControlLabels();
 	this.scheduleDraw();
 	}
 
@@ -730,7 +739,7 @@ class SwarmGraphView extends ItemView {
 		for (const node of this.nodes) {
 			let nx = node.x; let ny = node.y; let nz = node.z;
 			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'cluster-orbit') {
-				const angle = this.frame * 0.003 * motion.animationSpeed + node.clusterId * 0.73;
+				const angle = this.frame * 0.006 + node.clusterId * 0.73;
 				const dx = nx - node.clusterCenterX; const dz = nz - node.clusterCenterZ;
 				nx = node.clusterCenterX + dx * Math.cos(angle) - dz * Math.sin(angle);
 				nz = node.clusterCenterZ + dx * Math.sin(angle) + dz * Math.cos(angle);
@@ -1066,6 +1075,7 @@ class SwarmGraphView extends ItemView {
 		if (this.scopeSelect) this.scopeSelect.value = this.plugin.settings.graph.scope;
 		if (this.modeSelect) this.modeSelect.value = this.plugin.settings.mode;
 		if (this.colorSelect) this.colorSelect.value = this.plugin.settings.colors;
+		if (this.animationStyleSelect) this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
 		this.scheduleDraw();
 	}
 
@@ -1274,6 +1284,15 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		await this.saveSettings();
 	}
 
+	async setAnimationStyle(style) {
+		this.settings.motion.animationStyle = style;
+		this.settings.motion.animationEnabled = true;
+		if (this.settings.motion.reduceMotion && ['cluster-orbit', 'node-drift'].includes(style)) {
+			new Notice('Turn off Reduce Motion to animate notes.');
+		}
+		await this.saveSettings(true);
+	}
+
 	async applyPreset(id) {
 		const presets = {
 			constellation: { visual: 'constellation', colors: 'clusters', motion: { animationStyle: 'cluster-orbit', animationSpeed: 0.55, cameraSpeed: 0.35, reduceMotion: false, glowEnabled: true } },
@@ -1398,14 +1417,14 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(containerEl, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
 		this.section(containerEl, 'Motion');
 		this.toggle(containerEl, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
-		this.dropdown(containerEl, '3D animation style', 'Choose how the note space moves. Cluster styles group notes by their top-level vault folder.', 'motion', 'animationStyle', {
-			orbit: '3D orbit', 'cluster-orbit': 'Cluster orbit', 'cluster-tour': 'Cluster tour', 'node-drift': 'Floating notes',
-		}, null, true);
+		this.dropdown(containerEl, '3D animation style', 'Choose how notes or the camera move. Selecting a style enables Animation. Reduce Motion pauses Moving Notes and Notes Orbit Clusters.', 'motion', 'animationStyle', {
+			orbit: '3D camera orbit', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
+		}, (value) => this.plugin.setAnimationStyle(value));
 		this.slider(containerEl, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
 		this.slider(containerEl, 'Color animation speed', 'Set how fast Rainbow Flow and Animated Gradient cycle.', 'motion', 'colorSpeed', 0.05, 2, 0.05);
 		this.slider(containerEl, 'Camera speed', 'Set how quickly the 3D view turns.', 'motion', 'cameraSpeed', 0.1, 1, 0.05);
 		this.slider(containerEl, 'Cluster visit interval (seconds)', 'How long the camera stays with each folder cluster in Cluster tour.', 'motion', 'clusterPauseSeconds', 2, 30, 1);
-		this.slider(containerEl, 'Floating amount', 'Set how far individual notes drift in Floating notes mode.', 'motion', 'nodeDriftStrength', 0.01, 0.2, 0.01);
+		this.slider(containerEl, 'Moving note distance', 'Set how far individual notes drift in Moving notes mode.', 'motion', 'nodeDriftStrength', 0.01, 0.5, 0.01);
 		this.slider(containerEl, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
 		this.dropdown(containerEl, 'Link animation', 'Choose how motion travels along connections.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' });
 		this.dropdown(containerEl, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
