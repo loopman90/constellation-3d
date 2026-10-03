@@ -20,7 +20,7 @@
 .swarm-main { position: relative; flex: 1 1 auto; min-height: 180px; overflow: hidden; }
 .swarm-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .swarm-quickbar { position: absolute; z-index: 2; top: 38px; left: 18px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 36px); }
-.swarm-quickbar.is-hidden, .swarm-show-menu.is-hidden, .swarm-metric.is-hidden { display: none; }
+.swarm-header.is-hidden, .swarm-quickbar.is-hidden, .swarm-show-menu.is-hidden, .swarm-graph-label.is-hidden, .swarm-graph-stats.is-hidden, .swarm-metric.is-hidden, .swarm-activity.is-hidden, .swarm-footer.is-hidden { display: none !important; }
 .swarm-show-menu { position: absolute; z-index: 2; top: 38px; left: 18px; }
 .swarm-search, .swarm-select { height: 28px; border: 1px solid var(--swarm-border); border-radius: 2px; background: rgba(8, 14, 20, .86); color: #aebfc9; font: 9px var(--font-monospace); }
 .swarm-search { width: 180px; padding: 0 8px; }
@@ -43,8 +43,8 @@
 .swarm-control-button:hover { border-color: rgba(103,224,221,.55); color: var(--swarm-cyan); }
 .swarm-tooltip { position: absolute; z-index: 4; padding: 7px 9px; border: 1px solid rgba(103,224,221,.35); background: rgba(5,9,13,.94); color: #dce9ef; font-size: 10px; pointer-events: none; white-space: nowrap; }
 .swarm-tooltip.is-hidden { display: none; }
-.swarm-footer { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, minmax(100px, .7fr)) minmax(220px, 2fr); border-top: 1px solid var(--swarm-border); background: rgba(7, 10, 15, .93); }
-.swarm-footer.without-vault-notes { grid-template-columns: repeat(3, minmax(100px, .7fr)) minmax(220px, 2fr); }
+.swarm-footer { flex: 0 0 auto; display: grid; grid-template-columns: repeat(var(--swarm-metric-count, 4), minmax(100px, .7fr)) minmax(220px, 2fr); border-top: 1px solid var(--swarm-border); background: rgba(7, 10, 15, .93); }
+.swarm-footer.without-activity { grid-template-columns: repeat(var(--swarm-metric-count, 4), minmax(100px, .7fr)); }
 .swarm-panel { min-width: 0; min-height: 94px; padding: 14px 15px; border-right: 1px solid var(--swarm-border); }
 .swarm-panel-label { margin-bottom: 13px; color: #687b87; font-size: 8px; letter-spacing: .13em; white-space: nowrap; }
 .swarm-metric-value { color: #d7e5ec; font-size: 22px; font-weight: 300; }

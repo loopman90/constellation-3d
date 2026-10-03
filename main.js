@@ -34,6 +34,11 @@ const DEFAULT_SETTINGS = {
 		reduceMotion: false,
 	},
 	display: {
+		showHeader: true,
+		showGraphLabel: true,
+		showGraphStats: true,
+		showQuickMenu: true,
+		showFooter: true,
 		showLabels: true,
 		showLinks: true,
 		showFps: false,
@@ -44,6 +49,10 @@ const DEFAULT_SETTINGS = {
 		showDepthLayers: true,
 		showClusterHalos: true,
 		showVaultNotesCounter: true,
+		showLinkedNotesCounter: true,
+		showFolderCounter: true,
+		showActivityCounter: true,
+		showRecentChanges: true,
 	},
 	discovery: {
 		recentDays: 30,
@@ -133,6 +142,7 @@ class SwarmGraphView extends ItemView {
 
 	buildShell() {
 		const header = this.root.createDiv({ cls: 'swarm-header' });
+		this.header = header;
 		const identity = header.createDiv({ cls: 'swarm-identity' });
 		identity.createDiv({ cls: 'swarm-mark', text: 'S' });
 		const title = identity.createDiv();
@@ -236,16 +246,16 @@ class SwarmGraphView extends ItemView {
 		const footer = this.root.createDiv({ cls: 'swarm-footer' });
 		this.footer = footer;
 		this.vaultNotesMetric = this.makeMetric(footer, 'VAULT NOTES', 'metric-notes');
-		this.makeMetric(footer, 'LINKED NOTES', 'metric-linked');
-		this.makeMetric(footer, 'FOLDERS', 'metric-folders');
-		this.makeMetric(footer, 'RECENT ACTIVITY', 'metric-activity');
-		this.makeActivityPanel(footer);
-		this.updateVaultNotesCounterVisibility();
+		this.linkedNotesMetric = this.makeMetric(footer, 'LINKED NOTES', 'metric-linked');
+		this.folderMetric = this.makeMetric(footer, 'FOLDERS', 'metric-folders');
+		this.activityMetric = this.makeMetric(footer, 'RECENT ACTIVITY', 'metric-activity');
+		this.recentChangesPanel = this.makeActivityPanel(footer);
+		this.updateDisplayVisibility();
 	}
 
 	setQuickbarVisible(visible) {
-		this.quickbar?.toggleClass('is-hidden', !visible);
-		this.showQuickbarButton?.toggleClass('is-hidden', visible);
+		this.plugin.setSetting('display', 'showQuickMenu', visible);
+		this.updateDisplayVisibility();
 	}
 
 	toggleControlPanel(force) {
@@ -254,10 +264,23 @@ class SwarmGraphView extends ItemView {
 		this.settingsButton?.setAttribute('aria-expanded', String(open));
 	}
 
-	updateVaultNotesCounterVisibility() {
-		const visible = this.plugin.settings.display.showVaultNotesCounter;
-		this.vaultNotesMetric?.toggleClass('is-hidden', !visible);
-		this.footer?.toggleClass('without-vault-notes', !visible);
+	updateDisplayVisibility() {
+		const display = this.plugin.settings.display;
+		this.header?.toggleClass('is-hidden', !display.showHeader);
+		this.graphLabel?.toggleClass('is-hidden', !display.showGraphLabel);
+		this.graphStats?.toggleClass('is-hidden', !display.showGraphStats);
+		this.quickbar?.toggleClass('is-hidden', !display.showQuickMenu);
+		this.showQuickbarButton?.toggleClass('is-hidden', display.showQuickMenu);
+		this.vaultNotesMetric?.toggleClass('is-hidden', !display.showVaultNotesCounter);
+		this.linkedNotesMetric?.toggleClass('is-hidden', !display.showLinkedNotesCounter);
+		this.folderMetric?.toggleClass('is-hidden', !display.showFolderCounter);
+		this.activityMetric?.toggleClass('is-hidden', !display.showActivityCounter);
+		this.recentChangesPanel?.toggleClass('is-hidden', !display.showRecentChanges);
+		const metricCount = [display.showVaultNotesCounter, display.showLinkedNotesCounter, display.showFolderCounter, display.showActivityCounter].filter(Boolean).length;
+		this.footer?.style.setProperty('--swarm-metric-count', String(metricCount));
+		const hasFooterContent = metricCount > 0 || display.showRecentChanges;
+		this.footer?.toggleClass('is-hidden', !display.showFooter || !hasFooterContent);
+		this.footer?.toggleClass('without-activity', !display.showRecentChanges);
 	}
 
 	makeMetric(parent, label, key) {
@@ -271,6 +294,7 @@ class SwarmGraphView extends ItemView {
 		const panel = parent.createDiv({ cls: 'swarm-panel swarm-activity' });
 		panel.createDiv({ cls: 'swarm-panel-label', text: 'RECENT VAULT CHANGES' });
 		this.activityList = panel.createDiv({ cls: 'swarm-activity-list' });
+		return panel;
 	}
 
 	rebuildGraph() {
@@ -877,7 +901,7 @@ class SwarmGraphView extends ItemView {
 
 	applySettings() {
 		this.updateControlLabels();
-		this.updateVaultNotesCounterVisibility();
+		this.updateDisplayVisibility();
 		if (this.scopeSelect) this.scopeSelect.value = this.plugin.settings.graph.scope;
 		if (this.modeSelect) this.modeSelect.value = this.plugin.settings.mode;
 		this.scheduleDraw();
@@ -1162,12 +1186,21 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.section(containerEl, 'Journey');
 		this.slider(containerEl, 'Pause on each note (seconds)', 'Set the interval used by automatic note travel.', 'journey', 'nodePauseSeconds', 1, 30, 1);
 		this.section(containerEl, 'Display');
+		this.toggle(containerEl, 'App header', 'Show or hide the title and status bar at the top of the graph.', 'display', 'showHeader');
+		this.toggle(containerEl, 'Graph title', 'Show or hide the 3D Note Space label.', 'display', 'showGraphLabel');
+		this.toggle(containerEl, 'Node and link totals', 'Show or hide the live node and link counts in the graph.', 'display', 'showGraphStats');
+		this.toggle(containerEl, 'Quick Menu', 'Show or hide the Quick Menu. Use Show Quick Menu to restore it when hidden.', 'display', 'showQuickMenu');
+		this.toggle(containerEl, 'Bottom dashboard', 'Show or hide the complete statistics and recent changes area.', 'display', 'showFooter');
+		this.toggle(containerEl, 'Vault note counter', 'Show or hide the Vault Notes counter in the bottom dashboard.', 'display', 'showVaultNotesCounter');
+		this.toggle(containerEl, 'Linked notes counter', 'Show or hide the Linked Notes counter in the bottom dashboard.', 'display', 'showLinkedNotesCounter');
+		this.toggle(containerEl, 'Folder counter', 'Show or hide the Folders counter in the bottom dashboard.', 'display', 'showFolderCounter');
+		this.toggle(containerEl, 'Activity counter', 'Show or hide the Recent Activity counter in the bottom dashboard.', 'display', 'showActivityCounter');
+		this.toggle(containerEl, 'Recent changes list', 'Show or hide the recent vault changes list in the bottom dashboard.', 'display', 'showRecentChanges');
 		this.toggle(containerEl, 'Note labels', 'Show names for connected notes and the focused note.', 'display', 'showLabels');
 		this.toggle(containerEl, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
 		this.toggle(containerEl, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
 		this.toggle(containerEl, 'Depth layers', 'Draw subtle guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
 		this.toggle(containerEl, 'Cluster halos', 'Draw a soft boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
-		this.toggle(containerEl, 'Vault note counter', 'Show or hide the Vault Notes counter in the bottom metrics panel.', 'display', 'showVaultNotesCounter');
 		this.toggle(containerEl, 'FPS indicator', 'Show the current rendering rate in the header.', 'display', 'showFps');
 		this.slider(containerEl, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(containerEl, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
