@@ -25,6 +25,7 @@
 .swarm-search, .swarm-select { height: 28px; border: 1px solid var(--swarm-border); border-radius: 2px; background: rgba(8, 14, 20, .86); color: #aebfc9; font: 9px var(--font-monospace); }
 .swarm-search { width: 180px; padding: 0 8px; }
 .swarm-select { padding: 0 7px; }
+.swarm-color-select { max-width: 165px; }
 .swarm-search:focus, .swarm-select:focus { border-color: rgba(103,224,221,.6); outline: none; }
 .swarm-graph-label, .swarm-graph-stats { position: absolute; top: 16px; color: #647a88; font-size: 9px; letter-spacing: .15em; pointer-events: none; }
 .swarm-graph-label { left: 18px; }
