@@ -8,7 +8,7 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 
 - **Explore your graph:** switch between the whole vault, notes around the active note, and the active note's direct neighbors. Set how far local exploration reaches.
 - **Find notes:** search by note name, then narrow the graph by folder, tag, last-modified date, or minimum number of connections.
-- **See folders as clusters:** group notes by their top-level folder or full folder path, adjust how far clusters sit from each other and how far apart notes appear, color clusters, show cluster halos, hide a cluster from its context menu, rotate clusters independently, or let the camera tour them.
+- **See folders as clusters:** group notes by their top-level folder or full folder path, adjust cluster and note spacing, and show cluster halos. Right-click any note to collapse or expand its cluster, isolate that cluster, or hide it. Click a collapsed cluster summary to expand it; right-click an isolated cluster and choose **Show all clusters** to return to the full graph.
 - **Choose a visual style:** switch among Constellation, Timeline Map, Mind Palace, Circuit Minimal, Archive Fog, Focus Lens, Thread Weaver, Research Board, Signal Radar, Matrix Hacker, Star Map, Aqua Mint, Deep Space, Neon, Minimal, Soft Glow, Neural Bloom, Satellite View, Glass Minimal, Academic Light, and Ink Map. Styles change the scene, layout, colors, node shapes, or connections to create distinct ways to view your vault.
 - **Choose colors independently:** pick Aurora, Rainbow Flow, Deep Ocean, Monochrome, Sunset, Forest, Pastel, Custom Palette, Tag Based, Folder Based, Cluster Based, Animated Gradient, Heatmap, Age Gradient, Age Based, Galaxy Core, Terminal Amber, Violet Cosmos, Solar Ember, Single Color, Dual Color, Multi Color, Gradient, Rainbow, Connection Count, or Activity Based. Set custom HEX colors and Rainbow Flow speed in the Control Panel.
 - **Animate and tune the space:** choose 3D orbit, Cluster orbit, Cluster tour, or Floating notes. Pick a nebula, aurora, star-map grid, or deep-void background; tune star particles; and choose flowing particles, pulses, drawing lines, or moving dashes for links and route previews. Adjust color palettes, perspective depth, camera and animation speed, drift, glow, and reduced motion.
@@ -17,6 +17,7 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 - **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a specific note or its folder cluster, or preview a route through linked notes. Restore items individually from **Hidden items** in the Control Panel.
 - **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, depth guide rings, cluster halos, node size, link thickness, and the FPS display.
 - **Customize the interface:** turn the header, graph title, node/link totals, Quick Menu, and bottom dashboard on or off. Show only the counters and recent changes you want, alongside the existing label, link, icon, depth, and halo controls.
+- **Keep large graphs responsive:** search waits briefly until you pause typing before rebuilding the graph. Large graphs automatically use a lighter drawing mode; in very large graphs, the 12,000 strongest links are drawn while the full link count is retained.
 - **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view, while **Optimize View** automatically frames all currently visible notes.
 
 ## Install in Obsidian
@@ -56,6 +57,7 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 
 - Drag a note to move it. Drag empty space to rotate; choose **Pan mode** in the Quick Bar to move the canvas instead. Scroll to zoom.
 - Click **Optimize View** to center and scale the currently visible graph. Right-click a note to hide that note or its cluster; use the Control Panel's **Hidden items** section to restore individual items or show everything again.
+- Right-click a note and choose **Collapse cluster** to replace its folder's notes with one summary node. Click the summary or choose **Expand cluster** to restore its notes. Choose **Isolate cluster** to focus on one folder, then right-click it and choose **Show all clusters** to return to the full graph.
 - Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
 - Click **Control Panel** in the graph toolbar to adjust Graph, Visual, Background, Motion, Discovery, Journey, and Display settings without opening Obsidian's main settings. The same options are also available under **Settings → Constellation 3D**.

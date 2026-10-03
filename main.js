@@ -108,7 +108,7 @@ const DEFAULT_SETTINGS = {
 	},
 	journey: { nodePauseSeconds: 3 },
 	template: { activeTemplateId: 'constellation', modified: false },
-	interaction: { pinnedNodePaths: [], hiddenNodePaths: [], hiddenClusterNames: [], nodeOffsets: {}, pathStartPath: null, pathPreview: [] },
+	interaction: { pinnedNodePaths: [], hiddenNodePaths: [], hiddenClusterNames: [], collapsedClusterNames: [], isolatedClusterName: null, nodeOffsets: {}, pathStartPath: null, pathPreview: [] },
 };
 
 function mergeSettings(saved) {
@@ -165,6 +165,7 @@ class SwarmGraphView extends ItemView {
 		this.journeyIndex = -1;
 		this.focusedPath = null;
 		this.resizeObserver = null;
+		this.searchTimer = null;
 	}
 	getViewType() { return VIEW_TYPE; }
 	getDisplayText() { return 'Constellation 3D'; }
@@ -185,6 +186,7 @@ class SwarmGraphView extends ItemView {
 	async onClose() {
 		window.cancelAnimationFrame(this.animation);
 		if (this.journeyTimer) window.clearInterval(this.journeyTimer);
+		window.clearTimeout(this.searchTimer);
 		this.resizeObserver?.disconnect();
 	}
 
@@ -208,7 +210,8 @@ class SwarmGraphView extends ItemView {
 		this.searchInput = quickbar.createEl('input', { cls: 'swarm-search', attr: { type: 'search', placeholder: 'Search notes…', 'aria-label': 'Search notes' } });
 		this.searchInput.addEventListener('input', () => {
 			this.searchQuery = this.searchInput.value.trim().toLowerCase();
-			this.rebuildGraph();
+			window.clearTimeout(this.searchTimer);
+			this.searchTimer = window.setTimeout(() => this.rebuildGraph(), 140);
 		});
 		this.scopeSelect = quickbar.createEl('select', { cls: 'swarm-select', attr: { 'aria-label': 'Graph scope' } });
 		for (const [value, label] of [['global', 'Global'], ['local', 'Local'], ['current', 'Current note']]) {
@@ -356,15 +359,19 @@ class SwarmGraphView extends ItemView {
 	rebuildGraph() {
 		const graphSettings = this.plugin.settings.graph;
 		const discoverySettings = this.plugin.settings.discovery;
+		const interaction = this.plugin.settings.interaction;
+		const hiddenNodePaths = new Set(interaction.hiddenNodePaths);
 		const now = Date.now();
 		const folderTokens = graphSettings.folderFilter.split(/[,;\n]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
 		const tagTokens = graphSettings.tagFilter.split(/[,;\n]/).map((value) => value.trim().replace(/^#/, '').toLowerCase()).filter(Boolean);
+		const fileCaches = new Map();
 		const files = this.app.vault.getMarkdownFiles().filter((file) => {
 			if (folderTokens.length && !folderTokens.some((token) => file.path.toLowerCase().includes(token))) return false;
 			if (graphSettings.dateFilter === 'recent' && now - file.stat.mtime > discoverySettings.recentDays * 86400000) return false;
 			if (graphSettings.dateFilter === 'forgotten' && now - file.stat.mtime < discoverySettings.forgottenDays * 86400000) return false;
 			if (tagTokens.length) {
 				const cache = this.app.metadataCache.getFileCache(file);
+				fileCaches.set(file.path, cache);
 				const tags = new Set((cache?.tags || []).map((tag) => tag.tag.replace(/^#/, '').toLowerCase()));
 				const frontmatterTags = cache?.frontmatter?.tags;
 				for (const tag of (Array.isArray(frontmatterTags) ? frontmatterTags : typeof frontmatterTags === 'string' ? [frontmatterTags] : [])) tags.add(tag.replace(/^#/, '').toLowerCase());
@@ -411,7 +418,7 @@ class SwarmGraphView extends ItemView {
 		const minimumConnections = Math.max(graphSettings.minimumConnections, 0);
 		let visibleFiles = files.filter((file) => {
 			const connections = degree.get(file.path) || 0;
-		if (this.plugin.settings.interaction.hiddenNodePaths.includes(file.path)) return false;
+			if (hiddenNodePaths.has(file.path)) return false;
 			if (!visiblePaths.has(file.path) || (connections < minimumConnections && file.path !== activeFile?.path)) return false;
 			if (mode === 'recent-activity' && now - file.stat.mtime > discoverySettings.recentDays * 86400000) return false;
 			if (mode === 'forgotten-knowledge' && now - file.stat.mtime < discoverySettings.forgottenDays * 86400000) return false;
@@ -426,17 +433,21 @@ class SwarmGraphView extends ItemView {
 		const visibleSet = new Set(visibleFiles.map((file) => file.path));
 		let visibleEdges = edges.filter((edge) => visibleSet.has(edge.source) && visibleSet.has(edge.target));
 		const animationStyle = this.plugin.settings.motion.animationStyle;
+		const isolatedClusterName = interaction.isolatedClusterName;
+		const hiddenClusterNames = new Set(interaction.hiddenClusterNames);
 		const clusterNameFor = (file) => {
 			const folders = file.path.split('/').slice(0, -1);
 			if (!folders.length) return 'Vault root';
 			return graphSettings.clusterBy === 'folder' ? folders.join('/') : folders[0];
 		};
-		visibleFiles = visibleFiles.filter((file) => !this.plugin.settings.interaction.hiddenClusterNames.includes(clusterNameFor(file)));
+		visibleFiles = visibleFiles.filter((file) => !hiddenClusterNames.has(clusterNameFor(file)) && (!isolatedClusterName || clusterNameFor(file) === isolatedClusterName));
 		const clusterVisiblePaths = new Set(visibleFiles.map((file) => file.path));
 		visibleEdges = edges.filter((edge) => clusterVisiblePaths.has(edge.source) && clusterVisiblePaths.has(edge.target));
 		const clusterKeys = [...new Set(visibleFiles.map(clusterNameFor))].sort();
 		const clusterIndex = new Map(clusterKeys.map((key, index) => [key, index]));
-		const clusterMembers = new Map(clusterKeys.map((key) => [key, visibleFiles.filter((file) => clusterNameFor(file) === key)]));
+		const clusterMembers = new Map(clusterKeys.map((key) => [key, []]));
+		for (const file of visibleFiles) clusterMembers.get(clusterNameFor(file)).push(file);
+		const clusterLocalIndexes = new Map(clusterKeys.map((key) => [key, new Map(clusterMembers.get(key).map((file, index) => [file.path, index]))]));
 		const count = Math.max(visibleFiles.length, 1);
 		const oldestNoteTime = visibleFiles.reduce((oldest, file) => Math.min(oldest, file.stat.mtime), Infinity);
 		const newestNoteTime = visibleFiles.reduce((newest, file) => Math.max(newest, file.stat.mtime), 0);
@@ -460,7 +471,7 @@ class SwarmGraphView extends ItemView {
 				clusterCenterY = centerY * 0.46 * graphSettings.clusterSpacing;
 				clusterCenterZ = Math.sin(centerAngle) * centerRing * 0.46 * graphSettings.clusterSpacing;
 				const members = clusterMembers.get(clusterName) || [];
-				const localIndex = members.findIndex((member) => member.path === file.path);
+				const localIndex = clusterLocalIndexes.get(clusterName).get(file.path) || 0;
 			const localY = 1 - ((localIndex + 0.5) / Math.max(members.length, 1)) * 2;
 				const localRing = Math.sqrt(Math.max(0, 1 - localY * localY));
 				const localAngle = localIndex * Math.PI * (3 - Math.sqrt(5));
@@ -478,7 +489,7 @@ class SwarmGraphView extends ItemView {
 				y *= radius;
 				z = Math.sin(angle) * ring * radius;
 			}
-			const fileCache = this.app.metadataCache.getFileCache(file);
+			const fileCache = fileCaches.get(file.path) || this.app.metadataCache.getFileCache(file);
 			const frontmatterTags = fileCache?.frontmatter?.tags;
 			const tags = [
 				...(fileCache?.tags || []).map((tag) => tag.tag),
@@ -507,8 +518,44 @@ class SwarmGraphView extends ItemView {
 				offsetY: this.plugin.settings.interaction.nodeOffsets[file.path]?.y || 0,
 			};
 		});
+		const sourceNodes = this.nodes;
+		const collapsedClusters = new Set(interaction.collapsedClusterNames || []);
+		const pathToDisplayPath = new Map();
+		const nodesByCluster = new Map();
+		for (const node of sourceNodes) {
+			if (!nodesByCluster.has(node.clusterName)) nodesByCluster.set(node.clusterName, []);
+			nodesByCluster.get(node.clusterName).push(node);
+		}
+		this.nodes = [];
+		for (const [clusterName, members] of nodesByCluster) {
+			if (collapsedClusters.has(clusterName)) {
+				const summaryPath = `cluster::${clusterName}`;
+				this.nodes.push({ ...members[0], path: summaryPath, name: `${clusterName} (${members.length})`, degree: members.reduce((sum, node) => sum + node.degree, 0), isClusterSummary: true, clusterCount: members.length, focused: members.some((node) => node.focused), pinned: false });
+				for (const member of members) pathToDisplayPath.set(member.path, summaryPath);
+			} else {
+				for (const member of members) { this.nodes.push(member); pathToDisplayPath.set(member.path, member.path); }
+			}
+		}
 		this.nodeByPath = new Map(this.nodes.map((node) => [node.path, node]));
-		this.edges = visibleEdges;
+		const aggregatedEdges = new Map();
+		for (const edge of visibleEdges) {
+			const source = pathToDisplayPath.get(edge.source);
+			const target = pathToDisplayPath.get(edge.target);
+			if (!source || !target || source === target) continue;
+			const key = source < target ? `${source}\u0000${target}` : `${target}\u0000${source}`;
+			const current = aggregatedEdges.get(key);
+			if (current) current.count += edge.count;
+			else aggregatedEdges.set(key, { source, target, count: edge.count });
+		}
+		this.edges = [...aggregatedEdges.values()].map((edge, renderIndex) => ({ ...edge, renderIndex }));
+		this.adjacency = new Map(this.nodes.map((node) => [node.path, new Set()]));
+		for (const edge of this.edges) {
+			this.adjacency.get(edge.source)?.add(edge.target);
+			this.adjacency.get(edge.target)?.add(edge.source);
+		}
+		this.renderEdges = this.edges.length > 12000
+			? [...this.edges].sort((a, b) => b.count - a.count).slice(0, 12000)
+			: this.edges;
 		this.zoom = 1;
 		this.nodeCount?.setText(String(this.nodes.length));
 		this.edgeCount?.setText(String(this.edges.length));
@@ -699,7 +746,8 @@ class SwarmGraphView extends ItemView {
 			node.perspective = perspective;
 		}
 		const nodeMap = this.nodeByPath;
-		const sortedEdges = [...this.edges].sort((a, b) => {
+		const simplifiedRendering = this.nodes.length > 700;
+		const sortedEdges = simplifiedRendering ? this.renderEdges : [...this.renderEdges].sort((a, b) => {
 			const depthA = (nodeMap.get(a.source)?.depth || 0) + (nodeMap.get(a.target)?.depth || 0);
 			const depthB = (nodeMap.get(b.source)?.depth || 0) + (nodeMap.get(b.target)?.depth || 0);
 			return depthA - depthB;
@@ -708,12 +756,10 @@ class SwarmGraphView extends ItemView {
 		const routeEdges = new Set(interaction.pathPreview.slice(1).map((path, index) => `${interaction.pathPreview[index]}|${path}`));
 		const hoveredNode = this.nodes.find((node) => node.hovered);
 		const hoveredNeighborhood = new Set(hoveredNode ? [hoveredNode.path] : []);
-		if (hoveredNode) for (const edge of this.edges) {
-			if (edge.source === hoveredNode.path) hoveredNeighborhood.add(edge.target);
-			if (edge.target === hoveredNode.path) hoveredNeighborhood.add(edge.source);
-		}
+		if (hoveredNode) for (const path of this.adjacency.get(hoveredNode.path) || []) hoveredNeighborhood.add(path);
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
-		if (display.showClusterHalos) this.drawClusterHalos(ctx, width, height);
+		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height);
+		if (simplifiedRendering) ctx.setLineDash([]);
 		for (const edge of (display.showLinks ? sortedEdges : [])) {
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
@@ -728,23 +774,23 @@ class SwarmGraphView extends ItemView {
 				const middleX = (a.screenX + b.screenX) / 2;
 				ctx.lineTo(middleX, a.screenY); ctx.lineTo(middleX, b.screenY); ctx.lineTo(b.screenX, b.screenY);
 			} else if (this.plugin.settings.visual === 'thread-weaver') {
-				const bend = ((this.edges.indexOf(edge) % 2) ? 1 : -1) * Math.min(45, Math.hypot(b.screenX - a.screenX, b.screenY - a.screenY) * 0.15);
+				const bend = ((edge.renderIndex % 2) ? 1 : -1) * Math.min(45, Math.hypot(b.screenX - a.screenX, b.screenY - a.screenY) * 0.15);
 				ctx.quadraticCurveTo((a.screenX + b.screenX) / 2 + bend, (a.screenY + b.screenY) / 2 - bend, b.screenX, b.screenY);
 			} else ctx.lineTo(b.screenX, b.screenY);
 			const linkColor = this.getNodeColor(a);
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
-			if ((lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion) {
+			if (!simplifiedRendering && (lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion) {
 				ctx.setLineDash([5, 7]);
 				ctx.lineDashOffset = -this.frame * 0.12 * motion.connectionPulseSpeed;
 			}
 			if (isRoute && pathStyle === 'glow') { ctx.shadowColor = 'rgba(255,191,91,.85)'; ctx.shadowBlur = 10; }
 			ctx.stroke();
 			ctx.shadowBlur = 0;
-			ctx.setLineDash([]);
-			if (motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
-				const progress = (this.frame * 0.008 * motion.connectionPulseSpeed + this.edges.indexOf(edge) * 0.137) % 1;
+			if (!simplifiedRendering) ctx.setLineDash([]);
+			if (!simplifiedRendering && motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
+				const progress = (this.frame * 0.008 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				const px = a.screenX + (b.screenX - a.screenX) * progress;
 				const py = a.screenY + (b.screenY - a.screenY) * progress;
 				ctx.beginPath();
@@ -755,8 +801,8 @@ class SwarmGraphView extends ItemView {
 				ctx.fill();
 				ctx.shadowBlur = 0;
 			}
-			if (motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
-				const progress = (this.frame * 0.002 * motion.connectionPulseSpeed + this.edges.indexOf(edge) * 0.137) % 1;
+			if (!simplifiedRendering && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
+				const progress = (this.frame * 0.002 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
 				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
@@ -773,18 +819,20 @@ class SwarmGraphView extends ItemView {
 				else { ctx.arc(px, py, 3.4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,229,166,.96)'; ctx.shadowColor = 'rgba(255,191,91,.9)'; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0; }
 			}
 		}
-		const orderedNodes = [...this.nodes].sort((a, b) => a.depth - b.depth);
+		const orderedNodes = simplifiedRendering ? this.nodes : [...this.nodes].sort((a, b) => a.depth - b.depth);
+		const visual = this.plugin.settings.visual;
+		const activeNodePath = this.app.workspace.getActiveFile()?.path;
+		const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' || visual === 'deep-space' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
 		for (const node of orderedNodes) {
-			const pulse = 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
+			const pulse = simplifiedRendering ? 1 : 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
-			const visual = this.plugin.settings.visual;
 			const hue = this.getNodeColor(node);
-			const activeNodePath = this.app.workspace.getActiveFile()?.path;
-			const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' ? 3.8 : visual === 'deep-space' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
-			ctx.beginPath();
-			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
-			ctx.fillStyle = `rgba(${hue}, ${motion.glowEnabled && !['minimal', 'circuit-minimal'].includes(visual) ? 0.035 + node.depth * 0.012 : 0})`;
-			ctx.fill();
+			if (!simplifiedRendering) {
+				ctx.beginPath();
+				this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
+				ctx.fillStyle = `rgba(${hue}, ${motion.glowEnabled && !['minimal', 'circuit-minimal'].includes(visual) ? 0.035 + node.depth * 0.012 : 0})`;
+				ctx.fill();
+			}
 			ctx.beginPath();
 			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * pulse, visual);
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(node.path);
@@ -806,7 +854,7 @@ class SwarmGraphView extends ItemView {
 				ctx.lineWidth = node.focused ? 1.8 : 1.2;
 				ctx.stroke();
 			}
-			if (display.showLabels && (node.degree > 2 || node.hovered || node.focused)) {
+			if (display.showLabels && (node.hovered || node.focused || (!simplifiedRendering && node.degree > 2))) {
 				ctx.font = `${display.labelSize}px var(--font-monospace)`;
 				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual);
 				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? `rgba(35,48,55,${Math.max(0.52, 0.66 + node.depth * 0.2)})` : visual === 'matrix-hacker' ? 'rgba(156,255,178,.86)' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
@@ -1034,31 +1082,43 @@ class SwarmGraphView extends ItemView {
 		const interaction = this.plugin.settings.interaction;
 		const menu = new Menu();
 		if (node) {
-			const pinned = interaction.pinnedNodePaths.includes(node.path);
-			menu.addItem((item) => item.setTitle(pinned ? 'Unpin note' : 'Pin note').setIcon(pinned ? 'pin-off' : 'pin').onClick(() => {
-				const values = pinned ? interaction.pinnedNodePaths.filter((path) => path !== node.path) : [...interaction.pinnedNodePaths, node.path];
-				this.plugin.setSetting('interaction', 'pinnedNodePaths', values);
+			if (!node.isClusterSummary) {
+				const pinned = interaction.pinnedNodePaths.includes(node.path);
+				menu.addItem((item) => item.setTitle(pinned ? 'Unpin note' : 'Pin note').setIcon(pinned ? 'pin-off' : 'pin').onClick(() => {
+					const values = pinned ? interaction.pinnedNodePaths.filter((path) => path !== node.path) : [...interaction.pinnedNodePaths, node.path];
+					this.plugin.setSetting('interaction', 'pinnedNodePaths', values);
+				}));
+				menu.addItem((item) => item.setTitle('Hide note').setIcon('eye-off').onClick(() => {
+					this.plugin.setSetting('interaction', 'hiddenNodePaths', [...interaction.hiddenNodePaths, node.path], true);
+				}));
+				if (interaction.nodeOffsets[node.path]) menu.addItem((item) => item.setTitle('Reset node position').setIcon('rotate-ccw').onClick(() => {
+					const offsets = { ...interaction.nodeOffsets }; delete offsets[node.path];
+					this.plugin.setSetting('interaction', 'nodeOffsets', offsets);
+					const current = this.nodeByPath.get(node.path); if (current) { current.offsetX = 0; current.offsetY = 0; }
+				}));
+				menu.addItem((item) => item.setTitle('Set as route start').setIcon('route').onClick(() => {
+					this.plugin.setSetting('interaction', 'pathStartPath', node.path);
+				}));
+				if (interaction.pathStartPath && interaction.pathStartPath !== node.path) {
+					menu.addItem((item) => item.setTitle('Preview route to this note').setIcon('signpost').onClick(() => {
+						const path = this.findShortestPath(interaction.pathStartPath, node.path);
+						this.plugin.setSetting('interaction', 'pathPreview', path, false);
+					}));
+				}
+			}
+			const collapsed = interaction.collapsedClusterNames || [];
+			const isCollapsed = collapsed.includes(node.clusterName);
+			menu.addItem((item) => item.setTitle(isCollapsed ? `Expand cluster: ${node.clusterName}` : `Collapse cluster: ${node.clusterName}`).setIcon('layers').onClick(() => {
+				const next = isCollapsed ? collapsed.filter((name) => name !== node.clusterName) : [...collapsed, node.clusterName];
+				this.plugin.setSetting('interaction', 'collapsedClusterNames', next, true);
 			}));
-			menu.addItem((item) => item.setTitle('Hide note').setIcon('eye-off').onClick(() => {
-				this.plugin.setSetting('interaction', 'hiddenNodePaths', [...interaction.hiddenNodePaths, node.path], true);
-			}));
-			menu.addItem((item) => item.setTitle(`Hide cluster: ${node.clusterName}`).setIcon('layers').onClick(() => {
+			menu.addItem((item) => item.setTitle(`Hide cluster: ${node.clusterName}`).setIcon('eye-off').onClick(() => {
 				this.plugin.setSetting('interaction', 'hiddenClusterNames', [...new Set([...interaction.hiddenClusterNames, node.clusterName])], true);
 			}));
-			if (interaction.nodeOffsets[node.path]) menu.addItem((item) => item.setTitle('Reset node position').setIcon('rotate-ccw').onClick(() => {
-				const offsets = { ...interaction.nodeOffsets }; delete offsets[node.path];
-				this.plugin.setSetting('interaction', 'nodeOffsets', offsets);
-				const current = this.nodeByPath.get(node.path); if (current) { current.offsetX = 0; current.offsetY = 0; }
+			const isIsolated = interaction.isolatedClusterName === node.clusterName;
+			menu.addItem((item) => item.setTitle(isIsolated ? 'Show all clusters' : `Isolate cluster: ${node.clusterName}`).setIcon(isIsolated ? 'eye' : 'focus').onClick(() => {
+				this.plugin.setSetting('interaction', 'isolatedClusterName', isIsolated ? null : node.clusterName, true);
 			}));
-			menu.addItem((item) => item.setTitle('Set as route start').setIcon('route').onClick(() => {
-				this.plugin.setSetting('interaction', 'pathStartPath', node.path);
-			}));
-			if (interaction.pathStartPath && interaction.pathStartPath !== node.path) {
-				menu.addItem((item) => item.setTitle('Preview route to this note').setIcon('signpost').onClick(() => {
-					const path = this.findShortestPath(interaction.pathStartPath, node.path);
-					this.plugin.setSetting('interaction', 'pathPreview', path, false);
-				}));
-			}
 		}
 		if (interaction.hiddenNodePaths.length) {
 			menu.addItem((item) => item.setTitle('Show all hidden notes').setIcon('eye').onClick(() => {
@@ -1069,6 +1129,9 @@ class SwarmGraphView extends ItemView {
 			menu.addItem((item) => item.setTitle('Show all hidden clusters').setIcon('layers').onClick(() => {
 				this.plugin.setSetting('interaction', 'hiddenClusterNames', [], true);
 			}));
+		}
+		if (interaction.isolatedClusterName && node?.clusterName !== interaction.isolatedClusterName) {
+			menu.addItem((item) => item.setTitle('Show all clusters').setIcon('eye').onClick(() => this.plugin.setSetting('interaction', 'isolatedClusterName', null, true)));
 		}
 		if (interaction.pathPreview.length || interaction.pathStartPath) {
 			menu.addItem((item) => item.setTitle('Clear route preview').setIcon('x').onClick(async () => {
@@ -1124,7 +1187,7 @@ class SwarmGraphView extends ItemView {
 		const found = this.findNode(event);
 		for (const node of this.nodes) node.hovered = node === found;
 		if (!found) { this.tooltip.addClass('is-hidden'); this.scheduleDraw(); return; }
-		this.tooltip.setText(`${found.name}  ·  ${found.degree} links  ·  ${found.folder}`);
+		this.tooltip.setText(found.isClusterSummary ? `${found.clusterName}  ·  ${found.clusterCount} notes  ·  click to expand` : `${found.name}  ·  ${found.degree} links  ·  ${found.folder}`);
 		this.tooltip.style.left = `${event.clientX - this.canvas.getBoundingClientRect().left + 14}px`;
 		this.tooltip.style.top = `${event.clientY - this.canvas.getBoundingClientRect().top + 14}px`;
 		this.tooltip.removeClass('is-hidden');
@@ -1136,6 +1199,11 @@ class SwarmGraphView extends ItemView {
 		if (this.dragMoved) { this.dragMoved = false; return; }
 		const node = this.findNode(event);
 		if (!node) return;
+		if (node.isClusterSummary) {
+			const collapsed = this.plugin.settings.interaction.collapsedClusterNames || [];
+			this.plugin.setSetting('interaction', 'collapsedClusterNames', collapsed.filter((name) => name !== node.clusterName), true);
+			return;
+		}
 		const file = this.app.vault.getAbstractFileByPath(node.path);
 		if (file) this.app.workspace.openLinkText(node.path, '', false);
 	}
