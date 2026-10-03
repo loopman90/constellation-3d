@@ -293,7 +293,7 @@ class SwarmGraphView extends ItemView {
 		this.canvas.addEventListener('pointercancel', () => this.finishPointerGesture());
 		this.canvas.addEventListener('wheel', (event) => {
 			event.preventDefault();
-			this.zoom = Math.max(0.1, Math.min(3.5, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
+			this.zoom = Math.max(0.1, Math.min(12, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
 			this.scheduleDraw();
 		}, { passive: false });
 		this.canvas.addEventListener('click', (event) => this.onCanvasClick(event));
@@ -628,7 +628,7 @@ class SwarmGraphView extends ItemView {
 		const centerY = (minY + maxY) / 2;
 		const fitScale = Math.min((width - 80) / Math.max(1, maxX - minX), (height - 80) / Math.max(1, maxY - minY));
 		const oldZoom = this.zoom || 1;
-		const nextZoom = Math.max(0.1, Math.min(3.5, oldZoom * fitScale * 0.94));
+		const nextZoom = Math.max(0.1, Math.min(12, oldZoom * fitScale * 0.94));
 		const appliedScale = nextZoom / oldZoom;
 		this.zoom = nextZoom;
 		this.panX = (this.panX + width / 2 - centerX) * appliedScale;
