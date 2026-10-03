@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 # Serialize releases so each push increments the version produced by the previous run.
 concurrency:
@@ -76,11 +78,13 @@ jobs:
           git tag "${VERSION}"
           git push origin "${VERSION}"
 
-      - name: Package plugin files
-        run: |
-          mkdir -p package/constellation-three-d
-          cp main.js manifest.json styles.css package/constellation-three-d/
-          (cd package && zip -r ../constellation-3d.zip constellation-three-d)
+      - name: Attest release files
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Publish GitHub release
         env:
@@ -88,6 +92,6 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "${VERSION}" \
-            constellation-3d.zip main.js manifest.json styles.css \
+            main.js manifest.json styles.css \
             --title "Constellation 3D ${VERSION}" \
-            --notes "Automated release for the latest push to main. Download constellation-3d.zip and follow the installation guide: https://loopman90.github.io/constellation-3d/"
+            --notes "Automated release for the latest push to main. Download main.js, manifest.json, and styles.css into a folder named constellation-three-d inside .obsidian/plugins. Follow the installation guide: https://loopman90.github.io/constellation-3d/"

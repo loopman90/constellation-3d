@@ -20,11 +20,11 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 
 No coding, terminal, or build tools are needed.
 
-1. **Download the plugin ZIP.** Click [Download the latest release](https://github.com/loopman90/constellation-3d/releases/latest/download/constellation-3d.zip) and unzip the downloaded file. It contains a folder named `constellation-three-d`.
+1. **Download the plugin files.** Open the [latest release](https://github.com/loopman90/constellation-3d/releases/latest) and download `main.js`, `manifest.json`, and `styles.css` from its **Assets** list. Your browser may ask where to save each file; save all three somewhere easy to find, such as your Downloads folder.
 2. **Open your vault's plugin folder.** In your file manager, open the folder where your Obsidian vault is stored. Show hidden files if needed, then open `.obsidian`, then `plugins`. If there is no `plugins` folder, create one.
    - **Mac:** In Finder, press `Command` + `Shift` + `.` to show hidden files.
    - **Windows:** In File Explorer, choose **View → Show → Hidden items**.
-3. **Install the plugin.** Drag the complete `constellation-three-d` folder from the unzipped download into `.obsidian/plugins`. Do not drag only the files inside it. The final layout must be:
+3. **Install the plugin.** Inside `.obsidian/plugins`, create a folder named exactly `constellation-three-d`. Move the three downloaded files directly into that folder. Do not put them in another folder inside it. The final layout must be:
 
    ```text
    Your vault/
@@ -58,6 +58,6 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 
 ## Releases and development
 
-Every push to `main` automatically increments the patch version in `manifest.json` and `versions.json`, creates a matching Git tag and GitHub Release, and attaches a ready-to-install ZIP. The bot's version commit does not trigger another release.
+Every push to `main` automatically increments the patch version in `manifest.json` and `versions.json`, creates a matching Git tag and GitHub Release, publishes `main.js`, `manifest.json`, and `styles.css`, and creates GitHub artifact attestations for those files. The bot's version commit does not trigger another release.
 
 The installation guide is in `site/` and deploys through `.github/workflows/pages.yml`. The plugin is plain JavaScript and requires no build step.
