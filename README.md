@@ -11,6 +11,7 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 - **See folders as clusters:** group notes by their top-level folder or full folder path, adjust how far clusters sit from each other and how far apart notes appear, color clusters, show cluster halos, hide a cluster from its context menu, rotate clusters independently, or let the camera tour them.
 - **Choose a visual style:** switch among Constellation, Timeline Map, Mind Palace, Circuit Minimal, Archive Fog, Focus Lens, Thread Weaver, Research Board, Signal Radar, Matrix Hacker, Star Map, Aqua Mint, Deep Space, Neon, Minimal, Soft Glow, Neural Bloom, Satellite View, Glass Minimal, Academic Light, and Ink Map. Styles change the scene, layout, colors, node shapes, or connections to create distinct ways to view your vault.
 - **Animate and tune the space:** choose 3D orbit, Cluster orbit, Cluster tour, or Floating notes. Pick a nebula, aurora, star-map grid, or deep-void background; tune star particles; and choose flowing particles, pulses, drawing lines, or moving dashes for links and route previews. Adjust color palettes, perspective depth, camera and animation speed, drift, glow, and reduced motion.
+- **Control settings in the graph:** pause or resume animation with the bottom control button, or open the in-view **Control Panel** for live Graph, Visual, Background, Motion, Journey, Discovery, and Display controls without leaving the graph.
 - **Take a guided journey:** browse recent or forgotten notes, hubs, hidden gems, and orphans. Start automatic travel or move one note at a time.
 - **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a note, or preview a route through linked notes.
 - **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, depth guide rings, cluster halos, node size, link thickness, and the FPS display.
@@ -55,7 +56,7 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 - Drag a note to move it. Drag empty space to rotate; choose **Pan mode** in the Quick Bar to move the canvas instead. Scroll to zoom.
 - Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
-- Open **Settings → Constellation 3D** to adjust Graph, Visual, Background, Motion, Discovery, Journey, and Display settings, including cluster and note spacing, cluster grouping, particles, route animation, perspective depth, node icons, depth layers, and cluster halos.
+- Click **Control Panel** in the graph toolbar to adjust Graph, Visual, Background, Motion, Discovery, Journey, and Display settings without opening Obsidian's main settings. The same options are also available under **Settings → Constellation 3D**.
 
 ## Releases and development
 

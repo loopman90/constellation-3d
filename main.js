@@ -198,12 +198,21 @@ class SwarmGraphView extends ItemView {
 		const controls = main.createDiv({ cls: 'swarm-controls' });
 		this.animationButton = controls.createEl('button', { cls: 'swarm-control-button swarm-animation-button' });
 		this.animationButton.addEventListener('click', () => this.plugin.toggleAnimation());
-		this.settingsButton = controls.createEl('button', { cls: 'swarm-control-button', text: '⚙ SETTINGS' });
-		this.settingsButton.addEventListener('click', () => this.plugin.openSettings());
+		this.settingsButton = controls.createEl('button', { cls: 'swarm-control-button', text: '⚙ CONTROL PANEL' });
+		this.settingsButton.setAttribute('aria-expanded', 'false');
+		this.settingsButton.addEventListener('click', () => this.toggleControlPanel());
 		this.fitButton = controls.createEl('button', { cls: 'swarm-control-button', text: 'FIT NETWORK' });
 		this.fitButton.addEventListener('click', () => this.fitNetwork());
 		this.refreshButton = controls.createEl('button', { cls: 'swarm-control-button', text: '↻  REFRESH' });
 		this.refreshButton.addEventListener('click', () => this.rebuildGraph());
+		this.controlPanel = main.createDiv({ cls: 'swarm-control-panel is-hidden' });
+		const controlPanelHeader = this.controlPanel.createDiv({ cls: 'swarm-control-panel-header' });
+		controlPanelHeader.createDiv({ cls: 'swarm-control-panel-title', text: 'CONSTELLATION 3D CONTROL PANEL' });
+		const closePanelButton = controlPanelHeader.createEl('button', { cls: 'swarm-control-button swarm-control-panel-close', text: 'CLOSE' });
+		closePanelButton.setAttribute('aria-label', 'Close control panel');
+		closePanelButton.addEventListener('click', () => this.toggleControlPanel(false));
+		this.controlPanelBody = this.controlPanel.createDiv({ cls: 'swarm-control-panel-body' });
+		new SwarmConsoleSettingTab(this.app, this.plugin).renderSettings(this.controlPanelBody);
 		this.updateControlLabels();
 		this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
 		this.canvas.addEventListener('pointerleave', () => this.tooltip.addClass('is-hidden'));
@@ -237,6 +246,12 @@ class SwarmGraphView extends ItemView {
 	setQuickbarVisible(visible) {
 		this.quickbar?.toggleClass('is-hidden', !visible);
 		this.showQuickbarButton?.toggleClass('is-hidden', visible);
+	}
+
+	toggleControlPanel(force) {
+		const open = force ?? this.controlPanel?.hasClass('is-hidden');
+		this.controlPanel?.toggleClass('is-hidden', !open);
+		this.settingsButton?.setAttribute('aria-expanded', String(open));
 	}
 
 	updateVaultNotesCounterVisibility() {
@@ -1091,6 +1106,10 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.createEl('h2', { text: 'Constellation 3D' });
+		this.renderSettings(containerEl);
+	}
+
+	renderSettings(containerEl) {
 		this.section(containerEl, 'Quick');
 		this.dropdown(containerEl, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
 			constellation: 'Constellation', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
