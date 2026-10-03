@@ -254,6 +254,7 @@ class SwarmGraphView extends ItemView {
 			this.panButton.setText(this.panMode ? 'PAN MODE' : 'ORBIT MODE');
 			this.panButton.setAttribute('aria-pressed', String(this.panMode));
 		});
+		const controls = quickbar.createDiv({ cls: 'swarm-quick-controls' });
 		this.hideQuickbarButton = quickbar.createEl('button', { cls: 'swarm-control-button', text: 'HIDE QUICK MENU' });
 		this.hideQuickbarButton.setAttribute('aria-label', 'Hide quick menu');
 		this.hideQuickbarButton.addEventListener('click', () => this.setQuickbarVisible(false));
@@ -269,7 +270,6 @@ class SwarmGraphView extends ItemView {
 		this.nodeCount = this.graphStats.createEl('b', { text: '0' });
 		this.graphStats.createSpan({ text: '  /  LINKS ' });
 		this.edgeCount = this.graphStats.createEl('b', { text: '0' });
-		const controls = main.createDiv({ cls: 'swarm-controls' });
 		this.animationButton = controls.createEl('button', { cls: 'swarm-control-button swarm-animation-button' });
 		this.animationButton.addEventListener('click', () => this.plugin.toggleAnimation());
 		this.settingsButton = controls.createEl('button', { cls: 'swarm-control-button', text: '⚙ CONTROL PANEL' });
