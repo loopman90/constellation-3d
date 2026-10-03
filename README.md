@@ -20,7 +20,7 @@ This prototype does not run or control AI agents. Agent orchestration and extern
 
 ## Install for local development
 
-Copy this folder into `<vault>/.obsidian/plugins/constellation-3d/`, then enable **Constellation 3D** under **Settings → Community plugins**. The plugin is plain JavaScript and needs no build step.
+Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/constellation-three-d/`, then enable **Constellation 3D** under **Settings → Community plugins**. The plugin is plain JavaScript and needs no build step.
 
 For a visual, step-by-step installation walkthrough, visit the [Constellation 3D installation guide](https://loopman90.github.io/constellation-3d/).
 
