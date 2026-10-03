@@ -746,12 +746,13 @@ class SwarmGraphView extends ItemView {
 			node.perspective = perspective;
 		}
 		const nodeMap = this.nodeByPath;
-		const simplifiedRendering = this.nodes.length > 700;
+		const simplifiedRendering = this.nodes.length > 700 || this.renderEdges.length > 4000;
 		const sortedEdges = simplifiedRendering ? this.renderEdges : [...this.renderEdges].sort((a, b) => {
 			const depthA = (nodeMap.get(a.source)?.depth || 0) + (nodeMap.get(a.target)?.depth || 0);
 			const depthB = (nodeMap.get(b.source)?.depth || 0) + (nodeMap.get(b.target)?.depth || 0);
 			return depthA - depthB;
 		});
+		const animationStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 1200)) : 1;
 		const interaction = this.plugin.settings.interaction;
 		const routeEdges = new Set(interaction.pathPreview.slice(1).map((path, index) => `${interaction.pathPreview[index]}|${path}`));
 		const hoveredNode = this.nodes.find((node) => node.hovered);
@@ -760,7 +761,8 @@ class SwarmGraphView extends ItemView {
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
 		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height);
 		if (simplifiedRendering) ctx.setLineDash([]);
-		for (const edge of (display.showLinks ? sortedEdges : [])) {
+		for (const [edgeIndex, edge] of (display.showLinks ? sortedEdges : []).entries()) {
+			const animateLine = !simplifiedRendering || edgeIndex % animationStride === 0;
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
 			if (!a || !b) continue;
@@ -781,15 +783,16 @@ class SwarmGraphView extends ItemView {
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
-			if (!simplifiedRendering && (lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion) {
+			const useDashes = animateLine && (lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion;
+			if (useDashes) {
 				ctx.setLineDash([5, 7]);
 				ctx.lineDashOffset = -this.frame * 0.12 * motion.connectionPulseSpeed;
 			}
 			if (isRoute && pathStyle === 'glow') { ctx.shadowColor = 'rgba(255,191,91,.85)'; ctx.shadowBlur = 10; }
 			ctx.stroke();
 			ctx.shadowBlur = 0;
-			if (!simplifiedRendering) ctx.setLineDash([]);
-			if (!simplifiedRendering && motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
+			if (!simplifiedRendering || useDashes) ctx.setLineDash([]);
+			if (animateLine && motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
 				const progress = (this.frame * 0.008 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				const px = a.screenX + (b.screenX - a.screenX) * progress;
 				const py = a.screenY + (b.screenY - a.screenY) * progress;
@@ -801,7 +804,7 @@ class SwarmGraphView extends ItemView {
 				ctx.fill();
 				ctx.shadowBlur = 0;
 			}
-			if (!simplifiedRendering && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
+			if (animateLine && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
 				const progress = (this.frame * 0.002 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
