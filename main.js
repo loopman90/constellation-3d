@@ -320,11 +320,20 @@ class SwarmGraphView extends ItemView {
 		const clusterIndex = new Map(clusterKeys.map((key, index) => [key, index]));
 		const clusterMembers = new Map(clusterKeys.map((key) => [key, visibleFiles.filter((file) => clusterNameFor(file) === key)]));
 		const count = Math.max(visibleFiles.length, 1);
+		const oldestNoteTime = visibleFiles.reduce((oldest, file) => Math.min(oldest, file.stat.mtime), Infinity);
+		const newestNoteTime = visibleFiles.reduce((newest, file) => Math.max(newest, file.stat.mtime), 0);
+		this.timelineRange = [oldestNoteTime, newestNoteTime];
 		this.nodes = visibleFiles.map((file, index) => {
 			const clusterName = clusterNameFor(file);
 			const clusterId = clusterIndex.get(clusterName) || 0;
 			let x; let y; let z; let clusterCenterX = 0; let clusterCenterY = 0; let clusterCenterZ = 0;
-			if (animationStyle === 'cluster-orbit' || animationStyle === 'cluster-tour') {
+			if (this.plugin.settings.visual === 'timeline-map') {
+				const timeRange = Math.max(1, newestNoteTime - oldestNoteTime);
+				const progress = (file.stat.mtime - oldestNoteTime) / timeRange;
+				x = progress * 2.5 - 1.25;
+				y = ((clusterId - (clusterKeys.length - 1) / 2) * 0.12) + Math.sin(index * 1.7) * 0.035;
+				z = Math.min(degree.get(file.path) || 0, 12) * 0.012;
+			} else if (animationStyle === 'cluster-orbit' || animationStyle === 'cluster-tour' || this.plugin.settings.visual === 'mind-palace') {
 				const totalClusters = Math.max(clusterKeys.length, 1);
 				const centerY = 1 - ((clusterId + 0.5) / totalClusters) * 2;
 				const centerRing = Math.sqrt(Math.max(0, 1 - centerY * centerY));
@@ -481,7 +490,8 @@ class SwarmGraphView extends ItemView {
 		const display = this.plugin.settings.display;
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
 		this.drawBackground(ctx, width, height, motion);
-		const animatedSpin = this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
+		const timelineMode = this.plugin.settings.visual === 'timeline-map';
+		const animatedSpin = timelineMode ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
 		let focusedNode = this.nodeByPath.get(this.focusedPath);
 		if (!focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
 			const clusters = [...new Map(this.nodes.map((node) => [node.clusterName, node])).values()].sort((a, b) => a.clusterId - b.clusterId);
@@ -502,9 +512,11 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		const spin = this.rotation + animatedSpin;
-		const tilt = this.tiltOffset + (motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
-		const radius = Math.min(width, height) * (motion.reduceMotion ? 0.34 : 0.39) * (this.zoom || 1);
+		const tilt = this.tiltOffset + (!timelineMode && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
+		const radius = (timelineMode ? width * 0.37 : Math.min(width, height) * (motion.reduceMotion ? 0.34 : 0.39)) * (this.zoom || 1);
 		const focalLength = 4.5 - motion.perspectiveStrength * 1.3;
+		if (this.plugin.settings.visual === 'timeline-map') this.drawTimelineAxis(ctx, width, height);
+		if (['signal-radar', 'satellite-view'].includes(this.plugin.settings.visual)) this.drawRadar(ctx, width, height, radius, this.plugin.settings.visual);
 		for (const node of this.nodes) {
 			let nx = node.x; let ny = node.y; let nz = node.z;
 			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'cluster-orbit') {
@@ -555,8 +567,16 @@ class SwarmGraphView extends ItemView {
 			const pathStyle = motion.pathAnimationStyle;
 			ctx.beginPath();
 			ctx.moveTo(a.screenX, a.screenY);
-			ctx.lineTo(b.screenX, b.screenY);
-			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(119, 194, 213, ${alpha})`;
+			if (this.plugin.settings.visual === 'circuit-minimal') {
+				const middleX = (a.screenX + b.screenX) / 2;
+				ctx.lineTo(middleX, a.screenY); ctx.lineTo(middleX, b.screenY); ctx.lineTo(b.screenX, b.screenY);
+			} else if (this.plugin.settings.visual === 'thread-weaver') {
+				const bend = ((this.edges.indexOf(edge) % 2) ? 1 : -1) * Math.min(45, Math.hypot(b.screenX - a.screenX, b.screenY - a.screenY) * 0.15);
+				ctx.quadraticCurveTo((a.screenX + b.screenX) / 2 + bend, (a.screenY + b.screenY) / 2 - bend, b.screenX, b.screenY);
+			} else ctx.lineTo(b.screenX, b.screenY);
+			const visual = this.plugin.settings.visual;
+			const linkColor = visual === 'matrix-hacker' ? '104,255,151' : ['research-board', 'academic-light', 'ink-map'].includes(visual) ? '61,72,78' : visual === 'aqua-mint' ? '104,255,205' : visual === 'signal-radar' ? '94,255,185' : visual === 'star-map' ? '151,195,255' : '119,194,213';
+			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
 			if ((lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion) {
@@ -601,6 +621,7 @@ class SwarmGraphView extends ItemView {
 		for (const node of orderedNodes) {
 			const pulse = 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
+			const visual = this.plugin.settings.visual;
 			let hue = node.degree > 5 ? '255, 115, 180' : '103, 224, 221';
 			if (this.plugin.settings.colors === 'monochrome') hue = '198, 211, 220';
 			if (this.plugin.settings.colors === 'deep-ocean') hue = node.degree > 5 ? '104, 166, 255' : '93, 218, 229';
@@ -612,18 +633,36 @@ class SwarmGraphView extends ItemView {
 				const clusterPalette = ['103, 224, 221', '255, 115, 180', '255, 199, 95', '156, 132, 255', '121, 226, 148', '255, 143, 100'];
 				hue = clusterPalette[node.clusterId % clusterPalette.length];
 			}
-			if (this.plugin.settings.visual === 'deep-space') hue = node.depth > 0 ? '142, 129, 255' : '73, 191, 222';
-			if (this.plugin.settings.visual === 'neon') hue = node.degree > 5 ? '255, 72, 208' : '56, 230, 255';
-			if (this.plugin.settings.visual === 'minimal') hue = '162, 190, 204';
-			const glowScale = this.plugin.settings.visual === 'neon' ? 3.2 : this.plugin.settings.visual === 'deep-space' ? 3.8 : 2.7;
+			if (visual === 'deep-space') hue = node.depth > 0 ? '142, 129, 255' : '73, 191, 222';
+			if (visual === 'neon') hue = node.degree > 5 ? '255, 72, 208' : '56, 230, 255';
+			if (visual === 'minimal' || visual === 'circuit-minimal') hue = visual === 'minimal' ? '162, 190, 204' : '105, 229, 206';
+			if (visual === 'timeline-map') hue = Date.now() - node.mtime > 180 * 86400000 ? '246, 157, 104' : '105, 207, 237';
+			if (visual === 'mind-palace') hue = ['193,164,255', '255,164,207', '255,212,137', '135,224,215', '171,202,255', '226,179,247'][node.clusterId % 6];
+			if (visual === 'archive-fog') hue = Date.now() - node.mtime > 180 * 86400000 ? '196, 153, 107' : '161, 180, 185';
+			const activeNodePath = this.app.workspace.getActiveFile()?.path;
+			if (visual === 'focus-lens') hue = node.focused || node.path === activeNodePath || node.hovered ? '255, 211, 120' : '116, 188, 224';
+			if (visual === 'thread-weaver') hue = ['246,132,177', '158,145,255', '101,221,210', '255,196,117', '133,185,255', '206,142,239'][node.clusterId % 6];
+			if (visual === 'research-board') hue = ['44,125,142', '190,102,83', '110,128,84', '119,102,156', '62,116,173', '176,133,53'][node.clusterId % 6];
+			if (visual === 'signal-radar') hue = node.degree > 6 ? '255, 202, 87' : node.degree > 2 ? '98, 255, 179' : '76, 191, 195';
+			if (visual === 'matrix-hacker') hue = node.degree > 5 ? '165, 255, 123' : '55, 218, 112';
+			if (visual === 'star-map') hue = node.degree > 5 ? '255, 225, 168' : '156, 201, 255';
+			if (visual === 'aqua-mint') hue = node.degree > 5 ? '117, 255, 201' : '64, 203, 172';
+			if (visual === 'ink-map') hue = ['45,83,101', '143,82,61', '77,105,73', '100,81,128', '47,105,142', '160,118,51'][node.clusterId % 6];
+			if (visual === 'neural-bloom') hue = ['255,95,185', '181,112,255', '107,220,255', '255,169,93'][node.clusterId % 4];
+			if (visual === 'satellite-view') hue = node.degree > 5 ? '255, 185, 98' : '105, 211, 255';
+			if (visual === 'glass-minimal') hue = node.degree > 5 ? '164, 228, 240' : '121, 190, 210';
+			if (visual === 'academic-light') hue = ['53,119,143', '167,86,67', '87,121,73', '108,86,144', '58,103,155', '170,128,51'][node.clusterId % 6];
+			if (visual === 'soft-glow') hue = node.degree > 5 ? '255, 160, 215' : '135, 218, 255';
+			const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' ? 3.8 : visual === 'deep-space' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
 			ctx.beginPath();
-			ctx.arc(node.screenX, node.screenY, nodeRadius * glowScale * pulse, 0, Math.PI * 2);
-			ctx.fillStyle = `rgba(${hue}, ${motion.glowEnabled && this.plugin.settings.visual !== 'minimal' ? 0.035 + node.depth * 0.012 : 0})`;
+			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
+			ctx.fillStyle = `rgba(${hue}, ${motion.glowEnabled && !['minimal', 'circuit-minimal'].includes(visual) ? 0.035 + node.depth * 0.012 : 0})`;
 			ctx.fill();
 			ctx.beginPath();
-			ctx.arc(node.screenX, node.screenY, nodeRadius * pulse, 0, Math.PI * 2);
+			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * pulse, visual);
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(node.path);
-			const fade = hoveredNode && !isNeighbor ? 0.22 : 1;
+			const focusFade = visual === 'focus-lens' && !node.focused && node.path !== activeNodePath && !node.hovered ? 0.34 : 1;
+			const fade = (hoveredNode && !isNeighbor ? 0.22 : 1) * focusFade;
 			ctx.fillStyle = `rgba(${hue}, ${Math.max(0.18, Math.min(0.95, 0.58 + node.depth * 0.28)) * fade})`;
 			ctx.fill();
 			if (display.showNodeIcons && nodeRadius > 3) {
@@ -642,7 +681,8 @@ class SwarmGraphView extends ItemView {
 			}
 			if (display.showLabels && (node.degree > 2 || node.hovered || node.focused)) {
 				ctx.font = `${display.labelSize}px var(--font-monospace)`;
-				ctx.fillStyle = node.hovered ? '#fff' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
+				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual);
+				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? `rgba(35,48,55,${Math.max(0.52, 0.66 + node.depth * 0.2)})` : visual === 'matrix-hacker' ? 'rgba(156,255,178,.86)' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
 				ctx.fillText(node.name.slice(0, 26), node.screenX + nodeRadius + 5, node.screenY + 3);
 			}
 		}
@@ -659,28 +699,89 @@ class SwarmGraphView extends ItemView {
 		if (motion.animationEnabled) this.scheduleDraw();
 	}
 
+	traceNodeShape(ctx, x, y, size, style) {
+		if (style === 'circuit-minimal' || style === 'matrix-hacker') {
+			ctx.rect(x - size * 0.72, y - size * 0.72, size * 1.44, size * 1.44);
+			return;
+		}
+		if (style === 'signal-radar') {
+			ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath();
+			return;
+		}
+		if (style === 'star-map') {
+			for (let point = 0; point < 10; point++) {
+				const angle = -Math.PI / 2 + point * Math.PI / 5;
+				const radius = point % 2 ? size * 0.42 : size;
+				const px = x + Math.cos(angle) * radius; const py = y + Math.sin(angle) * radius;
+				if (!point) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+			}
+			ctx.closePath(); return;
+		}
+		ctx.arc(x, y, size, 0, Math.PI * 2);
+	}
+
 	drawBackground(ctx, width, height, motion) {
 		const style = motion.backgroundStyle;
-		const base = style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12';
+		const visual = this.plugin.settings.visual;
+		const visualBackgrounds = {
+			'timeline-map': '#101722', 'circuit-minimal': '#071115', 'archive-fog': '#111318',
+			'research-board': '#e8e5dc', 'matrix-hacker': '#020b07', 'star-map': '#050a18',
+			'aqua-mint': '#061512', 'signal-radar': '#07121d', 'mind-palace': '#100a1d',
+			'focus-lens': '#080d17', 'thread-weaver': '#0c0b18', 'ink-map': '#e9e4d6',
+			'neural-bloom': '#100817', 'satellite-view': '#071017', 'glass-minimal': '#10171c',
+			'academic-light': '#f0efe8', 'soft-glow': '#090d17',
+		};
+		const base = visualBackgrounds[visual] || (style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12');
 		ctx.fillStyle = base; ctx.fillRect(0, 0, width, height);
-		if (style === 'nebula' || style === 'aurora') {
+		const paperStyle = ['research-board', 'ink-map', 'academic-light'].includes(visual);
+		const flatStyle = ['matrix-hacker', 'circuit-minimal', 'signal-radar', 'star-map', 'satellite-view'].includes(visual);
+		if (!paperStyle && !flatStyle && (style === 'nebula' || style === 'aurora' || visual === 'deep-space' || visual === 'neural-bloom' || visual === 'mind-palace' || visual === 'archive-fog' || visual === 'soft-glow' || visual === 'thread-weaver')) {
 			const glow = ctx.createRadialGradient(width * 0.52, height * 0.48, 0, width * 0.52, height * 0.48, Math.max(width, height) * 0.72);
-			glow.addColorStop(0, style === 'aurora' ? 'rgba(26,105,111,.32)' : 'rgba(53,42,112,.34)');
-			glow.addColorStop(0.55, style === 'aurora' ? 'rgba(28,57,93,.18)' : 'rgba(18,50,69,.16)');
+			const cool = style === 'aurora' || visual === 'aqua-mint';
+			glow.addColorStop(0, visual === 'neural-bloom' ? 'rgba(214,68,255,.30)' : cool ? 'rgba(26,105,111,.32)' : 'rgba(53,42,112,.34)');
+			glow.addColorStop(0.55, visual === 'archive-fog' ? 'rgba(155,143,119,.16)' : cool ? 'rgba(28,57,93,.18)' : 'rgba(18,50,69,.16)');
 			glow.addColorStop(1, 'rgba(4,7,13,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
 		}
-		if (style === 'grid') {
-			ctx.strokeStyle = 'rgba(103,224,221,.07)'; ctx.lineWidth = 1;
-			for (let x = width / 2 % 36; x < width; x += 36) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
-			for (let y = height / 2 % 36; y < height; y += 36) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+		if (style === 'grid' || ['timeline-map', 'circuit-minimal', 'research-board', 'matrix-hacker', 'academic-light', 'ink-map'].includes(visual)) {
+			const light = ['research-board', 'academic-light', 'ink-map'].includes(visual);
+			ctx.strokeStyle = light ? 'rgba(45,64,72,.12)' : visual === 'matrix-hacker' ? 'rgba(70,255,135,.10)' : 'rgba(103,224,221,.07)'; ctx.lineWidth = 1;
+			const spacing = visual === 'research-board' || visual === 'academic-light' ? 24 : 36;
+			for (let x = width / 2 % spacing; x < width; x += spacing) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+			for (let y = height / 2 % spacing; y < height; y += spacing) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
 		}
 		const count = Math.max(0, Math.min(140, motion.backgroundParticles));
 		for (let i = 0; i < count; i++) {
 			const star = this.backgroundParticles[i];
 			const twinkle = motion.reduceMotion ? 0.55 : 0.3 + (Math.sin(this.frame * 0.012 + star.phase) + 1) * 0.3;
 			ctx.beginPath(); ctx.arc(star.x * width, star.y * height, star.size, 0, Math.PI * 2);
-			ctx.fillStyle = `rgba(190,225,255,${twinkle})`; ctx.fill();
+			ctx.fillStyle = visual === 'matrix-hacker' ? `rgba(104,255,151,${twinkle})` : ['research-board', 'academic-light', 'ink-map'].includes(visual) ? `rgba(51,75,83,${twinkle * 0.5})` : `rgba(190,225,255,${twinkle})`; ctx.fill();
 		}
+	}
+
+	drawTimelineAxis(ctx, width, height) {
+		const y = height * 0.84;
+		const fallback = [Date.now() - 4 * 365.25 * 86400000, Date.now()];
+		const [oldest, newest] = this.timelineRange?.every(Number.isFinite) ? this.timelineRange : fallback;
+		ctx.save(); ctx.strokeStyle = 'rgba(165,201,214,.44)'; ctx.fillStyle = 'rgba(188,213,225,.66)'; ctx.lineWidth = 1;
+		ctx.beginPath(); ctx.moveTo(width * 0.12, y); ctx.lineTo(width * 0.88, y); ctx.stroke();
+		for (let i = 0; i <= 4; i++) {
+			const x = width * (0.12 + 0.19 * i); ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5); ctx.stroke();
+			const year = new Date(oldest + ((newest - oldest) * i / 4)).getFullYear();
+			ctx.font = '9px var(--font-monospace)'; ctx.textAlign = 'center'; ctx.fillText(String(year), x, y + 18);
+		}
+		ctx.restore();
+	}
+
+	drawRadar(ctx, width, height, radius, style) {
+		const cx = width / 2 + this.panX; const cy = height / 2 + this.panY;
+		ctx.save(); ctx.strokeStyle = style === 'satellite-view' ? 'rgba(105,190,255,.2)' : 'rgba(81,220,177,.18)'; ctx.lineWidth = 1;
+		for (const scale of [0.28, 0.52, 0.78]) { ctx.beginPath(); ctx.arc(cx, cy, radius * scale, 0, Math.PI * 2); ctx.stroke(); }
+		if (this.plugin.settings.motion.animationEnabled && !this.plugin.settings.motion.reduceMotion) {
+			const angle = this.frame * 0.008;
+			ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(angle) * radius * 0.78, cy + Math.sin(angle) * radius * 0.78);
+			ctx.strokeStyle = style === 'satellite-view' ? 'rgba(105,190,255,.5)' : 'rgba(94,255,185,.45)'; ctx.lineWidth = 1.4; ctx.stroke();
+		}
+		ctx.restore();
 	}
 
 	drawDepthLayers(ctx, width, height, radius) {
@@ -980,7 +1081,13 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(containerEl, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(containerEl, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
 		this.section(containerEl, 'Visual');
-		this.dropdown(containerEl, 'Visual style', 'Choose how notes and connections are drawn.', null, 'visual', { constellation: 'Constellation', 'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal' });
+		this.dropdown(containerEl, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
+			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
+			'archive-fog': 'Archive Fog', 'focus-lens': 'Focus Lens', 'thread-weaver': 'Thread Weaver', 'research-board': 'Research Board',
+			'signal-radar': 'Signal Radar', 'matrix-hacker': 'Matrix Hacker', 'star-map': 'Star Map', 'aqua-mint': 'Aqua Mint',
+			'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal', 'soft-glow': 'Soft Glow', 'neural-bloom': 'Neural Bloom',
+			'satellite-view': 'Satellite View', 'glass-minimal': 'Glass Minimal', 'academic-light': 'Academic Light', 'ink-map': 'Ink Map',
+		}, null, true);
 		this.dropdown(containerEl, 'Color scheme', 'Color by link activity, age, folder cluster, or a fixed palette.', null, 'colors', { aurora: 'Aurora', 'deep-ocean': 'Deep Ocean', violet: 'Violet cosmos', ember: 'Solar ember', monochrome: 'Monochrome', 'age-gradient': 'Age Gradient', clusters: 'Folder clusters' });
 		this.section(containerEl, 'Background');
 		this.dropdown(containerEl, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Star map grid', void: 'Deep void' });
