@@ -8,11 +8,12 @@ The plugin reads Obsidian's local note and link metadata. It does not edit your 
 
 - **Explore your graph:** switch between the whole vault, notes around the active note, and the active note's direct neighbors. Set how far local exploration reaches.
 - **Find notes:** search by note name, then narrow the graph by folder, tag, last-modified date, or minimum number of connections.
-- **See folders as clusters:** group notes by their top-level folder, color clusters, rotate clusters independently, or let the camera tour them.
-- **Animate the space:** choose 3D orbit, Cluster orbit, Cluster tour, Floating notes, or Link pulses. Adjust camera and animation speed, drift amount, cluster visit time, glow, and motion reduction.
+- **See folders as clusters:** group notes by their top-level folder or full folder path, color clusters, show cluster halos, hide a cluster from its context menu, rotate clusters independently, or let the camera tour them.
+- **Animate and style the space:** choose 3D orbit, Cluster orbit, Cluster tour, or Floating notes. Pick a nebula, aurora, star-map grid, or deep-void background; tune star particles; and choose flowing particles, pulses, drawing lines, or moving dashes for links and route previews. Adjust color palettes, perspective depth, camera and animation speed, drift, glow, and reduced motion.
 - **Take a guided journey:** browse recent or forgotten notes, hubs, hidden gems, and orphans. Start automatic travel or move one note at a time.
 - **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a note, or preview a route through linked notes.
-- **Personalize the view:** use visual presets and color schemes, then adjust labels, node size, link thickness, and the FPS display.
+- **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, depth guide rings, cluster halos, node size, link thickness, and the FPS display.
+- **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view.
 
 ## Install in Obsidian
 
@@ -49,10 +50,10 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 
 ## Controls and settings
 
-- Drag to rotate the 3D space; use search, scope, and discovery mode in the Quick Bar.
+- Drag a note to move it. Drag empty space to rotate; choose **Pan mode** in the Quick Bar to move the canvas instead. Scroll to zoom.
 - Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
-- Open **Settings → Constellation 3D** to adjust Graph, Visual, Motion, Discovery, Journey, and Display settings.
+- Open **Settings → Constellation 3D** to adjust Graph, Visual, Background, Motion, Discovery, Journey, and Display settings, including cluster grouping, particles, route animation, perspective depth, node icons, depth layers, and cluster halos.
 
 ## Releases and development
 

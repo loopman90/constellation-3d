@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = {
 		dateFilter: 'all',
 		minimumConnections: 0,
 		includeFloatingNotes: true,
+		clusterBy: 'top-level',
 	},
 	motion: {
 		animationEnabled: true,
@@ -22,6 +23,11 @@ const DEFAULT_SETTINGS = {
 		clusterPauseSeconds: 6,
 		nodeDriftStrength: 0.08,
 		connectionPulseSpeed: 0.7,
+		lineAnimationStyle: 'flow',
+		pathAnimationStyle: 'comet',
+		backgroundStyle: 'nebula',
+		backgroundParticles: 45,
+		perspectiveStrength: 1,
 		glowEnabled: true,
 		reduceMotion: false,
 	},
@@ -32,6 +38,9 @@ const DEFAULT_SETTINGS = {
 		labelSize: 10,
 		edgeThickness: 1,
 		nodeSize: 1,
+		showNodeIcons: false,
+		showDepthLayers: true,
+		showClusterHalos: true,
 	},
 	discovery: {
 		recentDays: 30,
@@ -40,7 +49,7 @@ const DEFAULT_SETTINGS = {
 	},
 	journey: { nodePauseSeconds: 3 },
 	template: { activeTemplateId: 'constellation', modified: false },
-	interaction: { pinnedNodePaths: [], hiddenNodePaths: [], pathStartPath: null, pathPreview: [] },
+	interaction: { pinnedNodePaths: [], hiddenNodePaths: [], hiddenClusterNames: [], nodeOffsets: {}, pathStartPath: null, pathPreview: [] },
 };
 
 function mergeSettings(saved) {
@@ -52,8 +61,10 @@ function mergeSettings(saved) {
 		motion: {
 			...DEFAULT_SETTINGS.motion,
 			...(stored.motion || {}),
+			animationStyle: stored.motion?.animationStyle === 'link-pulse' ? 'orbit' : (stored.motion?.animationStyle ?? DEFAULT_SETTINGS.motion.animationStyle),
 			animationEnabled: stored.motion?.animationEnabled ?? stored.animate ?? DEFAULT_SETTINGS.motion.animationEnabled,
 			animationSpeed: stored.motion?.animationSpeed ?? stored.rotationSpeed ?? DEFAULT_SETTINGS.motion.animationSpeed,
+			lineAnimationStyle: stored.motion?.lineAnimationStyle ?? (stored.motion?.animationStyle === 'link-pulse' ? 'pulse' : DEFAULT_SETTINGS.motion.lineAnimationStyle),
 		},
 		display: {
 			...DEFAULT_SETTINGS.display,
@@ -82,6 +93,11 @@ class SwarmGraphView extends ItemView {
 		this.tiltOffset = 0;
 		this.dragPoint = null;
 		this.dragMoved = false;
+		this.dragNode = null;
+		this.panGesture = false;
+		this.panX = 0;
+		this.panY = 0;
+		this.backgroundParticles = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), size: 0.35 + Math.random() * 1.2, phase: Math.random() * Math.PI * 2 }));
 		this.fpsFrames = 0;
 		this.fpsLast = performance.now();
 		this.journeyTimer = null;
@@ -152,6 +168,14 @@ class SwarmGraphView extends ItemView {
 		this.nextButton = quickbar.createEl('button', { cls: 'swarm-control-button swarm-step-button', text: '›' });
 		this.nextButton.setAttribute('aria-label', 'Next note');
 		this.nextButton.addEventListener('click', () => this.stepJourney(1));
+		this.panButton = quickbar.createEl('button', { cls: 'swarm-control-button', text: 'ORBIT MODE' });
+		this.panButton.setAttribute('aria-label', 'Switch graph drag mode');
+		this.panButton.title = 'Switch between orbiting and panning the canvas';
+		this.panButton.addEventListener('click', () => {
+			this.panMode = !this.panMode;
+			this.panButton.setText(this.panMode ? 'PAN MODE' : 'ORBIT MODE');
+			this.panButton.setAttribute('aria-pressed', String(this.panMode));
+		});
 		this.canvas = main.createEl('canvas', { cls: 'swarm-canvas' });
 		this.ctx = this.canvas.getContext('2d');
 		this.tooltip = main.createDiv({ cls: 'swarm-tooltip' });
@@ -176,9 +200,17 @@ class SwarmGraphView extends ItemView {
 		this.canvas.addEventListener('pointerdown', (event) => {
 			this.dragPoint = { x: event.clientX, y: event.clientY };
 			this.dragMoved = false;
+			this.dragNode = event.button === 0 && !event.shiftKey && !this.panMode ? this.findNode(event) : null;
+			this.panGesture = event.button === 1 || event.shiftKey || this.panMode;
 			this.canvas.setPointerCapture(event.pointerId);
 		});
-		this.canvas.addEventListener('pointerup', () => { this.dragPoint = null; });
+		this.canvas.addEventListener('pointerup', () => this.finishPointerGesture());
+		this.canvas.addEventListener('pointercancel', () => this.finishPointerGesture());
+		this.canvas.addEventListener('wheel', (event) => {
+			event.preventDefault();
+			this.zoom = Math.max(0.45, Math.min(2.6, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
+			this.scheduleDraw();
+		}, { passive: false });
 		this.canvas.addEventListener('click', (event) => this.onCanvasClick(event));
 		this.canvas.addEventListener('contextmenu', (event) => this.onCanvasContextMenu(event));
 
@@ -274,14 +306,22 @@ class SwarmGraphView extends ItemView {
 			visibleFiles = visibleFiles.filter((file) => (degree.get(file.path) || 0) > 0 || file.path === activeFile?.path);
 		}
 		const visibleSet = new Set(visibleFiles.map((file) => file.path));
-		const visibleEdges = edges.filter((edge) => visibleSet.has(edge.source) && visibleSet.has(edge.target));
+		let visibleEdges = edges.filter((edge) => visibleSet.has(edge.source) && visibleSet.has(edge.target));
 		const animationStyle = this.plugin.settings.motion.animationStyle;
-		const clusterKeys = [...new Set(visibleFiles.map((file) => file.path.includes('/') ? file.path.split('/')[0] : 'Vault root'))].sort();
+		const clusterNameFor = (file) => {
+			const folders = file.path.split('/').slice(0, -1);
+			if (!folders.length) return 'Vault root';
+			return graphSettings.clusterBy === 'folder' ? folders.join('/') : folders[0];
+		};
+		visibleFiles = visibleFiles.filter((file) => !this.plugin.settings.interaction.hiddenClusterNames.includes(clusterNameFor(file)));
+		const clusterVisiblePaths = new Set(visibleFiles.map((file) => file.path));
+		visibleEdges = edges.filter((edge) => clusterVisiblePaths.has(edge.source) && clusterVisiblePaths.has(edge.target));
+		const clusterKeys = [...new Set(visibleFiles.map(clusterNameFor))].sort();
 		const clusterIndex = new Map(clusterKeys.map((key, index) => [key, index]));
-		const clusterMembers = new Map(clusterKeys.map((key) => [key, visibleFiles.filter((file) => (file.path.includes('/') ? file.path.split('/')[0] : 'Vault root') === key)]));
+		const clusterMembers = new Map(clusterKeys.map((key) => [key, visibleFiles.filter((file) => clusterNameFor(file) === key)]));
 		const count = Math.max(visibleFiles.length, 1);
 		this.nodes = visibleFiles.map((file, index) => {
-			const clusterName = file.path.includes('/') ? file.path.split('/')[0] : 'Vault root';
+			const clusterName = clusterNameFor(file);
 			const clusterId = clusterIndex.get(clusterName) || 0;
 			let x; let y; let z; let clusterCenterX = 0; let clusterCenterY = 0; let clusterCenterZ = 0;
 			if (animationStyle === 'cluster-orbit' || animationStyle === 'cluster-tour') {
@@ -323,6 +363,8 @@ class SwarmGraphView extends ItemView {
 				x, y, z,
 				screenX: 0, screenY: 0, depth: 0,
 				phase: Math.random() * Math.PI * 2,
+				offsetX: this.plugin.settings.interaction.nodeOffsets[file.path]?.x || 0,
+				offsetY: this.plugin.settings.interaction.nodeOffsets[file.path]?.y || 0,
 			};
 		});
 		this.nodeByPath = new Map(this.nodes.map((node) => [node.path, node]));
@@ -424,6 +466,9 @@ class SwarmGraphView extends ItemView {
 
 	fitNetwork() {
 		this.zoom = 1;
+		this.panX = 0; this.panY = 0;
+		this.rotation = 0; this.tiltOffset = 0;
+		this.scheduleDraw();
 	}
 
 	draw() {
@@ -435,6 +480,7 @@ class SwarmGraphView extends ItemView {
 		const motion = this.plugin.settings.motion;
 		const display = this.plugin.settings.display;
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
+		this.drawBackground(ctx, width, height, motion);
 		const animatedSpin = this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
 		let focusedNode = this.nodeByPath.get(this.focusedPath);
 		if (!focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
@@ -458,7 +504,7 @@ class SwarmGraphView extends ItemView {
 		const spin = this.rotation + animatedSpin;
 		const tilt = this.tiltOffset + (motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
 		const radius = Math.min(width, height) * (motion.reduceMotion ? 0.34 : 0.39) * (this.zoom || 1);
-		const focalLength = 2.8;
+		const focalLength = 4.5 - motion.perspectiveStrength * 1.3;
 		for (const node of this.nodes) {
 			let nx = node.x; let ny = node.y; let nz = node.z;
 			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'cluster-orbit') {
@@ -478,8 +524,8 @@ class SwarmGraphView extends ItemView {
 			const ry = ny * Math.cos(tilt) - rz * Math.sin(tilt);
 			const depth = ny * Math.sin(tilt) + rz * Math.cos(tilt);
 			const perspective = focalLength / (focalLength - depth);
-			node.screenX = width / 2 + rx * radius * perspective;
-			node.screenY = height / 2 + ry * radius * perspective;
+			node.screenX = width / 2 + this.panX + rx * radius * perspective + node.offsetX * width;
+			node.screenY = height / 2 + this.panY + ry * radius * perspective + node.offsetY * height;
 			node.depth = depth;
 			node.perspective = perspective;
 		}
@@ -497,6 +543,8 @@ class SwarmGraphView extends ItemView {
 			if (edge.source === hoveredNode.path) hoveredNeighborhood.add(edge.target);
 			if (edge.target === hoveredNode.path) hoveredNeighborhood.add(edge.source);
 		}
+		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
+		if (display.showClusterHalos) this.drawClusterHalos(ctx, width, height);
 		for (const edge of (display.showLinks ? sortedEdges : [])) {
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
@@ -504,13 +552,22 @@ class SwarmGraphView extends ItemView {
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(edge.source) && hoveredNeighborhood.has(edge.target);
 			const alpha = isRoute ? 0.94 : Math.max(0.025, Math.min(0.5, (0.1 + (a.depth + b.depth) * 0.06 + Math.min(edge.count, 4) * 0.025) * (hoveredNode && !isNeighbor ? 0.25 : 1)));
+			const pathStyle = motion.pathAnimationStyle;
 			ctx.beginPath();
 			ctx.moveTo(a.screenX, a.screenY);
 			ctx.lineTo(b.screenX, b.screenY);
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(119, 194, 213, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
+			const lineStyle = motion.lineAnimationStyle;
+			if ((lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion) {
+				ctx.setLineDash([5, 7]);
+				ctx.lineDashOffset = -this.frame * 0.12 * motion.connectionPulseSpeed;
+			}
+			if (isRoute && pathStyle === 'glow') { ctx.shadowColor = 'rgba(255,191,91,.85)'; ctx.shadowBlur = 10; }
 			ctx.stroke();
-			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'link-pulse') {
+			ctx.shadowBlur = 0;
+			ctx.setLineDash([]);
+			if (motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
 				const progress = (this.frame * 0.008 * motion.connectionPulseSpeed + this.edges.indexOf(edge) * 0.137) % 1;
 				const px = a.screenX + (b.screenX - a.screenX) * progress;
 				const py = a.screenY + (b.screenY - a.screenY) * progress;
@@ -522,6 +579,23 @@ class SwarmGraphView extends ItemView {
 				ctx.fill();
 				ctx.shadowBlur = 0;
 			}
+			if (motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
+				const progress = (this.frame * 0.002 * motion.connectionPulseSpeed + this.edges.indexOf(edge) * 0.137) % 1;
+				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
+				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
+				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
+			}
+			if (isRoute && motion.animationEnabled && !motion.reduceMotion && ['comet', 'draw'].includes(pathStyle)) {
+				const routeIndex = interaction.pathPreview.indexOf(edge.source);
+				const forward = routeIndex >= 0 && interaction.pathPreview[routeIndex + 1] === edge.target;
+				const start = forward ? a : b; const end = forward ? b : a;
+				const progress = (this.frame * 0.004 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
+				const px = start.screenX + (end.screenX - start.screenX) * progress;
+				const py = start.screenY + (end.screenY - start.screenY) * progress;
+				ctx.beginPath();
+				if (pathStyle === 'draw') { ctx.moveTo(start.screenX, start.screenY); ctx.lineTo(px, py); ctx.strokeStyle = 'rgba(255,225,155,.95)'; ctx.lineWidth = 2.2; ctx.stroke(); }
+				else { ctx.arc(px, py, 3.4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,229,166,.96)'; ctx.shadowColor = 'rgba(255,191,91,.9)'; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0; }
+			}
 		}
 		const orderedNodes = [...this.nodes].sort((a, b) => a.depth - b.depth);
 		for (const node of orderedNodes) {
@@ -530,6 +604,9 @@ class SwarmGraphView extends ItemView {
 			let hue = node.degree > 5 ? '255, 115, 180' : '103, 224, 221';
 			if (this.plugin.settings.colors === 'monochrome') hue = '198, 211, 220';
 			if (this.plugin.settings.colors === 'deep-ocean') hue = node.degree > 5 ? '104, 166, 255' : '93, 218, 229';
+			if (this.plugin.settings.colors === 'violet') hue = node.degree > 5 ? '205, 139, 255' : '127, 190, 255';
+			if (this.plugin.settings.colors === 'ember') hue = node.degree > 5 ? '255, 111, 82' : '255, 202, 106';
+			if (this.plugin.settings.colors === 'aurora') hue = node.degree > 5 ? '255, 115, 180' : '103, 224, 221';
 			if (this.plugin.settings.colors === 'age-gradient') hue = Date.now() - node.mtime > this.plugin.settings.discovery.forgottenDays * 86400000 ? '255, 128, 91' : '110, 230, 195';
 			if (this.plugin.settings.colors === 'clusters') {
 				const clusterPalette = ['103, 224, 221', '255, 115, 180', '255, 199, 95', '156, 132, 255', '121, 226, 148', '255, 143, 100'];
@@ -549,6 +626,13 @@ class SwarmGraphView extends ItemView {
 			const fade = hoveredNode && !isNeighbor ? 0.22 : 1;
 			ctx.fillStyle = `rgba(${hue}, ${Math.max(0.18, Math.min(0.95, 0.58 + node.depth * 0.28)) * fade})`;
 			ctx.fill();
+			if (display.showNodeIcons && nodeRadius > 3) {
+				ctx.fillStyle = '#071015';
+				ctx.font = `600 ${Math.max(5, nodeRadius * 1.15)}px sans-serif`;
+				ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+				ctx.fillText(node.name.slice(0, 1).toUpperCase(), node.screenX, node.screenY + 0.3);
+				ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+			}
 			if (node.pinned || node.focused) {
 				ctx.beginPath();
 				ctx.arc(node.screenX, node.screenY, nodeRadius + (node.focused ? 6 : 4), 0, Math.PI * 2);
@@ -573,6 +657,68 @@ class SwarmGraphView extends ItemView {
 			}
 		} else this.fpsIndicator?.setText('');
 		if (motion.animationEnabled) this.scheduleDraw();
+	}
+
+	drawBackground(ctx, width, height, motion) {
+		const style = motion.backgroundStyle;
+		const base = style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12';
+		ctx.fillStyle = base; ctx.fillRect(0, 0, width, height);
+		if (style === 'nebula' || style === 'aurora') {
+			const glow = ctx.createRadialGradient(width * 0.52, height * 0.48, 0, width * 0.52, height * 0.48, Math.max(width, height) * 0.72);
+			glow.addColorStop(0, style === 'aurora' ? 'rgba(26,105,111,.32)' : 'rgba(53,42,112,.34)');
+			glow.addColorStop(0.55, style === 'aurora' ? 'rgba(28,57,93,.18)' : 'rgba(18,50,69,.16)');
+			glow.addColorStop(1, 'rgba(4,7,13,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
+		}
+		if (style === 'grid') {
+			ctx.strokeStyle = 'rgba(103,224,221,.07)'; ctx.lineWidth = 1;
+			for (let x = width / 2 % 36; x < width; x += 36) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+			for (let y = height / 2 % 36; y < height; y += 36) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+		}
+		const count = Math.max(0, Math.min(140, motion.backgroundParticles));
+		for (let i = 0; i < count; i++) {
+			const star = this.backgroundParticles[i];
+			const twinkle = motion.reduceMotion ? 0.55 : 0.3 + (Math.sin(this.frame * 0.012 + star.phase) + 1) * 0.3;
+			ctx.beginPath(); ctx.arc(star.x * width, star.y * height, star.size, 0, Math.PI * 2);
+			ctx.fillStyle = `rgba(190,225,255,${twinkle})`; ctx.fill();
+		}
+	}
+
+	drawDepthLayers(ctx, width, height, radius) {
+		ctx.save(); ctx.strokeStyle = 'rgba(113,179,201,.12)'; ctx.lineWidth = 1;
+		for (const level of [-0.52, 0, 0.52]) {
+			ctx.beginPath(); ctx.ellipse(width / 2 + this.panX, height / 2 + this.panY + level * radius * 0.38, radius * 0.78, radius * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
+		}
+		ctx.restore();
+	}
+
+	drawClusterHalos(ctx, width, height) {
+		const groups = new Map();
+		for (const node of this.nodes) {
+			if (!groups.has(node.clusterName)) groups.set(node.clusterName, []);
+			groups.get(node.clusterName).push(node);
+		}
+		const palette = ['103,224,221', '255,115,180', '255,199,95', '156,132,255', '121,226,148', '255,143,100'];
+		for (const nodes of groups.values()) {
+			if (nodes.length < 2) continue;
+			const cx = nodes.reduce((sum, node) => sum + node.screenX, 0) / nodes.length;
+			const cy = nodes.reduce((sum, node) => sum + node.screenY, 0) / nodes.length;
+			const radius = Math.min(190, Math.max(22, ...nodes.map((node) => Math.hypot(node.screenX - cx, node.screenY - cy) + 14)));
+			const color = palette[nodes[0].clusterId % palette.length];
+			ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+			ctx.fillStyle = `rgba(${color},.035)`; ctx.fill();
+			ctx.strokeStyle = `rgba(${color},.16)`; ctx.lineWidth = 1; ctx.stroke();
+		}
+	}
+
+	async finishPointerGesture() {
+		const moved = this.dragMoved;
+		if (this.dragNode && moved) {
+			const offsets = { ...this.plugin.settings.interaction.nodeOffsets, [this.dragNode.path]: { x: this.dragNode.offsetX, y: this.dragNode.offsetY } };
+			this.plugin.settings.interaction.nodeOffsets = offsets;
+			await this.plugin.saveSettings();
+		}
+		this.dragPoint = null; this.dragNode = null; this.panGesture = false;
+		this.canvas.style.cursor = 'grab';
 	}
 
 	scheduleDraw() {
@@ -627,6 +773,14 @@ class SwarmGraphView extends ItemView {
 			menu.addItem((item) => item.setTitle('Hide note').setIcon('eye-off').onClick(() => {
 				this.plugin.setSetting('interaction', 'hiddenNodePaths', [...interaction.hiddenNodePaths, node.path], true);
 			}));
+			menu.addItem((item) => item.setTitle(`Hide cluster: ${node.clusterName}`).setIcon('layers').onClick(() => {
+				this.plugin.setSetting('interaction', 'hiddenClusterNames', [...new Set([...interaction.hiddenClusterNames, node.clusterName])], true);
+			}));
+			if (interaction.nodeOffsets[node.path]) menu.addItem((item) => item.setTitle('Reset node position').setIcon('rotate-ccw').onClick(() => {
+				const offsets = { ...interaction.nodeOffsets }; delete offsets[node.path];
+				this.plugin.setSetting('interaction', 'nodeOffsets', offsets);
+				const current = this.nodeByPath.get(node.path); if (current) { current.offsetX = 0; current.offsetY = 0; }
+			}));
 			menu.addItem((item) => item.setTitle('Set as route start').setIcon('route').onClick(() => {
 				this.plugin.setSetting('interaction', 'pathStartPath', node.path);
 			}));
@@ -640,6 +794,11 @@ class SwarmGraphView extends ItemView {
 		if (interaction.hiddenNodePaths.length) {
 			menu.addItem((item) => item.setTitle('Show all hidden notes').setIcon('eye').onClick(() => {
 				this.plugin.setSetting('interaction', 'hiddenNodePaths', [], true);
+			}));
+		}
+		if (interaction.hiddenClusterNames.length) {
+			menu.addItem((item) => item.setTitle('Show all hidden clusters').setIcon('layers').onClick(() => {
+				this.plugin.setSetting('interaction', 'hiddenClusterNames', [], true);
 			}));
 		}
 		if (interaction.pathPreview.length || interaction.pathStartPath) {
@@ -677,10 +836,19 @@ class SwarmGraphView extends ItemView {
 	onPointerMove(event) {
 		if (this.dragPoint) {
 			if (Math.abs(event.clientX - this.dragPoint.x) + Math.abs(event.clientY - this.dragPoint.y) > 2) this.dragMoved = true;
-			this.rotation += (event.clientX - this.dragPoint.x) * 0.006;
-			this.tiltOffset = Math.max(-0.9, Math.min(0.9, this.tiltOffset + (event.clientY - this.dragPoint.y) * 0.004));
+			const dx = event.clientX - this.dragPoint.x;
+			const dy = event.clientY - this.dragPoint.y;
+			if (this.dragNode) {
+				this.dragNode.offsetX += dx / Math.max(1, this.canvas.clientWidth);
+				this.dragNode.offsetY += dy / Math.max(1, this.canvas.clientHeight);
+			} else if (this.panGesture) {
+				this.panX += dx; this.panY += dy;
+			} else {
+				this.rotation += dx * 0.006;
+				this.tiltOffset = Math.max(-0.9, Math.min(0.9, this.tiltOffset + dy * 0.004));
+			}
 			this.dragPoint = { x: event.clientX, y: event.clientY };
-			this.canvas.style.cursor = 'grabbing';
+			this.canvas.style.cursor = this.dragNode ? 'move' : 'grabbing';
 			this.scheduleDraw();
 			return;
 		}
@@ -691,7 +859,7 @@ class SwarmGraphView extends ItemView {
 		this.tooltip.style.left = `${event.clientX - this.canvas.getBoundingClientRect().left + 14}px`;
 		this.tooltip.style.top = `${event.clientY - this.canvas.getBoundingClientRect().top + 14}px`;
 		this.tooltip.removeClass('is-hidden');
-		this.canvas.style.cursor = found ? 'pointer' : 'default';
+		this.canvas.style.cursor = found ? 'grab' : 'grab';
 		this.scheduleDraw();
 	}
 
@@ -763,7 +931,7 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		const presets = {
 			constellation: { visual: 'constellation', colors: 'clusters', motion: { animationStyle: 'cluster-orbit', animationSpeed: 0.55, cameraSpeed: 0.35, reduceMotion: false, glowEnabled: true } },
 			deepSpace: { visual: 'deep-space', colors: 'deep-ocean', motion: { animationStyle: 'cluster-tour', animationSpeed: 0.38, cameraSpeed: 0.25, reduceMotion: false, glowEnabled: true } },
-			neon: { visual: 'neon', colors: 'aurora', motion: { animationStyle: 'link-pulse', animationSpeed: 0.9, cameraSpeed: 0.7, reduceMotion: false, glowEnabled: true } },
+			neon: { visual: 'neon', colors: 'aurora', motion: { animationStyle: 'orbit', lineAnimationStyle: 'pulse', animationSpeed: 0.9, cameraSpeed: 0.7, reduceMotion: false, glowEnabled: true } },
 			minimal: { visual: 'minimal', colors: 'monochrome', motion: { animationStyle: 'orbit', animationSpeed: 0.2, cameraSpeed: 0.15, reduceMotion: true, glowEnabled: false } },
 		};
 		const preset = presets[id];
@@ -810,19 +978,26 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.dropdown(containerEl, 'Date filter', 'Limit notes by their last modified date.', 'graph', 'dateFilter', { all: 'All notes', recent: 'Recently modified', forgotten: 'Long time ago' }, null, true);
 		this.slider(containerEl, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
 		this.toggle(containerEl, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
+		this.dropdown(containerEl, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
 		this.section(containerEl, 'Visual');
 		this.dropdown(containerEl, 'Visual style', 'Choose how notes and connections are drawn.', null, 'visual', { constellation: 'Constellation', 'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal' });
-		this.dropdown(containerEl, 'Color scheme', 'Color by link activity, age, folder cluster, or a fixed palette.', null, 'colors', { aurora: 'Aurora', 'deep-ocean': 'Deep Ocean', monochrome: 'Monochrome', 'age-gradient': 'Age Gradient', clusters: 'Folder clusters' });
+		this.dropdown(containerEl, 'Color scheme', 'Color by link activity, age, folder cluster, or a fixed palette.', null, 'colors', { aurora: 'Aurora', 'deep-ocean': 'Deep Ocean', violet: 'Violet cosmos', ember: 'Solar ember', monochrome: 'Monochrome', 'age-gradient': 'Age Gradient', clusters: 'Folder clusters' });
+		this.section(containerEl, 'Background');
+		this.dropdown(containerEl, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Star map grid', void: 'Deep void' });
+		this.slider(containerEl, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
 		this.section(containerEl, 'Motion');
 		this.toggle(containerEl, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
 		this.dropdown(containerEl, '3D animation style', 'Choose how the note space moves. Cluster styles group notes by their top-level vault folder.', 'motion', 'animationStyle', {
-			orbit: '3D orbit', 'cluster-orbit': 'Cluster orbit', 'cluster-tour': 'Cluster tour', 'node-drift': 'Floating notes', 'link-pulse': 'Link pulses',
+			orbit: '3D orbit', 'cluster-orbit': 'Cluster orbit', 'cluster-tour': 'Cluster tour', 'node-drift': 'Floating notes',
 		}, null, true);
 		this.slider(containerEl, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
 		this.slider(containerEl, 'Camera speed', 'Set how quickly the 3D view turns.', 'motion', 'cameraSpeed', 0.1, 1, 0.05);
 		this.slider(containerEl, 'Cluster visit interval (seconds)', 'How long the camera stays with each folder cluster in Cluster tour.', 'motion', 'clusterPauseSeconds', 2, 30, 1);
 		this.slider(containerEl, 'Floating amount', 'Set how far individual notes drift in Floating notes mode.', 'motion', 'nodeDriftStrength', 0.01, 0.2, 0.01);
 		this.slider(containerEl, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
+		this.dropdown(containerEl, 'Link animation', 'Choose how motion travels along connections.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' });
+		this.dropdown(containerEl, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
+		this.slider(containerEl, '3D perspective depth', 'Increase or soften the perspective difference between near and far notes.', 'motion', 'perspectiveStrength', 0.2, 2.4, 0.1);
 		this.toggle(containerEl, 'Reduce motion', 'Use a calmer camera with less ambient movement.', 'motion', 'reduceMotion');
 		this.toggle(containerEl, 'Node glow', 'Show a soft glow around notes.', 'motion', 'glowEnabled');
 		this.section(containerEl, 'Discovery');
@@ -837,6 +1012,9 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.section(containerEl, 'Display');
 		this.toggle(containerEl, 'Note labels', 'Show names for connected notes and the focused note.', 'display', 'showLabels');
 		this.toggle(containerEl, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
+		this.toggle(containerEl, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
+		this.toggle(containerEl, 'Depth layers', 'Draw subtle guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
+		this.toggle(containerEl, 'Cluster halos', 'Draw a soft boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
 		this.toggle(containerEl, 'FPS indicator', 'Show the current rendering rate in the header.', 'display', 'showFps');
 		this.slider(containerEl, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(containerEl, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);

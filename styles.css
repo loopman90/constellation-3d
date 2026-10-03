@@ -18,7 +18,7 @@
 .swarm-clock { margin-left: 15px; color: #83939e; font-size: 10px; }
 .swarm-fps { color: var(--swarm-cyan); font-size: 9px; }
 .swarm-main { position: relative; flex: 1 1 auto; min-height: 180px; overflow: hidden; }
-.swarm-canvas { display: block; width: 100%; height: 100%; }
+.swarm-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .swarm-quickbar { position: absolute; z-index: 2; top: 38px; left: 18px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 36px); }
 .swarm-search, .swarm-select { height: 28px; border: 1px solid var(--swarm-border); border-radius: 2px; background: rgba(8, 14, 20, .86); color: #aebfc9; font: 9px var(--font-monospace); }
 .swarm-search { width: 180px; padding: 0 8px; }
