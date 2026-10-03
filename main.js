@@ -265,6 +265,9 @@ class SwarmGraphView extends ItemView {
 		this.settingsButton.addEventListener('click', () => this.toggleControlPanel());
 		this.fitButton = controls.createEl('button', { cls: 'swarm-control-button', text: 'FIT NETWORK' });
 		this.fitButton.addEventListener('click', () => this.fitNetwork());
+		this.optimizeButton = controls.createEl('button', { cls: 'swarm-control-button', text: 'OPTIMIZE VIEW' });
+		this.optimizeButton.setAttribute('aria-label', 'Optimize view to fit visible notes');
+		this.optimizeButton.addEventListener('click', () => this.optimizeView());
 		this.refreshButton = controls.createEl('button', { cls: 'swarm-control-button', text: '↻  REFRESH' });
 		this.refreshButton.addEventListener('click', () => this.rebuildGraph());
 		this.controlPanel = main.createDiv({ cls: 'swarm-control-panel is-hidden' });
@@ -274,7 +277,8 @@ class SwarmGraphView extends ItemView {
 		closePanelButton.setAttribute('aria-label', 'Close control panel');
 		closePanelButton.addEventListener('click', () => this.toggleControlPanel(false));
 		this.controlPanelBody = this.controlPanel.createDiv({ cls: 'swarm-control-panel-body' });
-		new SwarmConsoleSettingTab(this.app, this.plugin).renderSettings(this.controlPanelBody);
+		this.controlSettings = new SwarmConsoleSettingTab(this.app, this.plugin);
+		this.controlSettings.renderSettings(this.controlPanelBody);
 		this.updateControlLabels();
 		this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
 		this.canvas.addEventListener('pointerleave', () => this.tooltip.addClass('is-hidden'));
@@ -289,7 +293,7 @@ class SwarmGraphView extends ItemView {
 		this.canvas.addEventListener('pointercancel', () => this.finishPointerGesture());
 		this.canvas.addEventListener('wheel', (event) => {
 			event.preventDefault();
-			this.zoom = Math.max(0.45, Math.min(2.6, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
+			this.zoom = Math.max(0.1, Math.min(3.5, (this.zoom || 1) * Math.exp(-event.deltaY * 0.001)));
 			this.scheduleDraw();
 		}, { passive: false });
 		this.canvas.addEventListener('click', (event) => this.onCanvasClick(event));
@@ -510,6 +514,7 @@ class SwarmGraphView extends ItemView {
 		this.edgeCount?.setText(String(this.edges.length));
 		this.updateMetrics(files);
 		this.renderActivity();
+		this.controlSettings?.refreshVisibilityManager();
 		if (this.scopeSelect) this.scopeSelect.value = graphSettings.scope;
 		if (this.modeSelect) this.modeSelect.value = mode;
 	this.scheduleDraw();
@@ -605,6 +610,31 @@ class SwarmGraphView extends ItemView {
 		this.panX = 0; this.panY = 0;
 		this.rotation = 0; this.tiltOffset = 0;
 		this.scheduleDraw();
+	}
+
+	optimizeView() {
+		const width = this.canvas?.clientWidth || 0;
+		const height = this.canvas?.clientHeight || 0;
+		const projected = this.nodes.filter((node) => Number.isFinite(node.screenX) && Number.isFinite(node.screenY));
+		if (!projected.length || width < 1 || height < 1) {
+			new Notice('There are no visible notes to fit.');
+			return;
+		}
+		const minX = Math.min(...projected.map((node) => node.screenX));
+		const maxX = Math.max(...projected.map((node) => node.screenX));
+		const minY = Math.min(...projected.map((node) => node.screenY));
+		const maxY = Math.max(...projected.map((node) => node.screenY));
+		const centerX = (minX + maxX) / 2;
+		const centerY = (minY + maxY) / 2;
+		const fitScale = Math.min((width - 80) / Math.max(1, maxX - minX), (height - 80) / Math.max(1, maxY - minY));
+		const oldZoom = this.zoom || 1;
+		const nextZoom = Math.max(0.1, Math.min(3.5, oldZoom * fitScale * 0.94));
+		const appliedScale = nextZoom / oldZoom;
+		this.zoom = nextZoom;
+		this.panX = (this.panX + width / 2 - centerX) * appliedScale;
+		this.panY = (this.panY + height / 2 - centerY) * appliedScale;
+		this.scheduleDraw();
+		new Notice('View optimized to fit visible notes.');
 	}
 
 	draw() {
@@ -1282,6 +1312,49 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(containerEl, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(containerEl, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
 		this.slider(containerEl, 'Link thickness', 'Scale the lines between notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
+		this.section(containerEl, 'Hidden items');
+		containerEl.createEl('p', { text: 'Right-click a note or cluster in the graph to hide it. Restore hidden items individually here.' });
+		this.visibilityManager = containerEl.createDiv({ cls: 'swarm-hidden-items-manager' });
+		this.refreshVisibilityManager();
+	}
+
+	refreshVisibilityManager() {
+		if (!this.visibilityManager?.isConnected) return;
+		const container = this.visibilityManager;
+		container.empty();
+		const { hiddenNodePaths, hiddenClusterNames } = this.plugin.settings.interaction;
+		if (!hiddenNodePaths.length && !hiddenClusterNames.length) {
+			container.createEl('p', { text: 'No hidden notes or clusters.' });
+			return;
+		}
+		for (const path of hiddenNodePaths) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			const label = file?.basename || path;
+			new Setting(container).setName(label).setDesc(path).addButton((button) => button
+				.setButtonText('Show note')
+				.onClick(async () => {
+					const values = this.plugin.settings.interaction.hiddenNodePaths.filter((item) => item !== path);
+					await this.plugin.setSetting('interaction', 'hiddenNodePaths', values, true);
+					this.refreshVisibilityManager();
+				}));
+		}
+		for (const name of hiddenClusterNames) {
+			new Setting(container).setName(name).setDesc('Hidden folder cluster').addButton((button) => button
+				.setButtonText('Show cluster')
+				.onClick(async () => {
+					const values = this.plugin.settings.interaction.hiddenClusterNames.filter((item) => item !== name);
+					await this.plugin.setSetting('interaction', 'hiddenClusterNames', values, true);
+					this.refreshVisibilityManager();
+				}));
+		}
+		new Setting(container).addButton((button) => button
+			.setButtonText('Show all hidden items')
+			.setCta()
+			.onClick(async () => {
+				await this.plugin.setSetting('interaction', 'hiddenNodePaths', [], false);
+				await this.plugin.setSetting('interaction', 'hiddenClusterNames', [], true);
+				this.refreshVisibilityManager();
+			}));
 	}
 
 	section(container, name) { new Setting(container).setName(name).setHeading(); }
