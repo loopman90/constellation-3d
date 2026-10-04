@@ -869,7 +869,7 @@ class SwarmGraphView extends ItemView {
 		const hoveredNeighborhood = new Set(hoveredNode ? [hoveredNode.path] : []);
 		if (hoveredNode) for (const path of this.adjacency.get(hoveredNode.path) || []) hoveredNeighborhood.add(path);
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
-		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height);
+		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height, visual);
 		if (simplifiedRendering) ctx.setLineDash([]);
 		for (const [edgeIndex, edge] of sortedEdges.entries()) {
 			const animateLine = !simplifiedRendering || edgeIndex % animationStride === 0;
@@ -948,7 +948,7 @@ class SwarmGraphView extends ItemView {
 		const orderedNodes = simplifiedRendering ? this.nodes : [...this.nodes].sort((a, b) => a.depth - b.depth);
 		const visual = this.plugin.settings.visual;
 		const activeNodePath = this.app.workspace.getActiveFile()?.path;
-		const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' || visual === 'deep-space' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
+		const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' || visual === 'deep-space' || visual === 'star-system' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
 		for (const node of orderedNodes) {
 			const pulse = simplifiedRendering ? 1 : 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
@@ -1058,7 +1058,7 @@ class SwarmGraphView extends ItemView {
 			ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath();
 			return;
 		}
-		if (style === 'star-map') {
+		if (style === 'star-map' || style === 'star-system') {
 			for (let point = 0; point < 10; point++) {
 				const angle = -Math.PI / 2 + point * Math.PI / 5;
 				const radius = point % 2 ? size * 0.42 : size;
@@ -1075,7 +1075,7 @@ class SwarmGraphView extends ItemView {
 		const visual = this.plugin.settings.visual;
 		const visualBackgrounds = {
 			'timeline-map': '#101722', 'circuit-minimal': '#071115', 'archive-fog': '#111318',
-			'research-board': '#e8e5dc', 'matrix-hacker': '#020b07', 'star-map': '#050a18',
+			'research-board': '#e8e5dc', 'matrix-hacker': '#020b07', 'star-map': '#050a18', 'star-system': '#030611',
 			'aqua-mint': '#061512', 'signal-radar': '#07121d', 'mind-palace': '#100a1d',
 			'focus-lens': '#080d17', 'thread-weaver': '#0c0b18', 'ink-map': '#e9e4d6',
 			'neural-bloom': '#100817', 'satellite-view': '#071017', 'glass-minimal': '#10171c',
@@ -1085,6 +1085,11 @@ class SwarmGraphView extends ItemView {
 		ctx.fillStyle = base; ctx.fillRect(0, 0, width, height);
 		const paperStyle = ['research-board', 'ink-map', 'academic-light'].includes(visual);
 		const flatStyle = ['matrix-hacker', 'circuit-minimal', 'signal-radar', 'star-map', 'satellite-view'].includes(visual);
+		if (visual === 'star-system') {
+			const nebula = ctx.createRadialGradient(width * 0.5, height * 0.48, 0, width * 0.5, height * 0.48, Math.max(width, height) * 0.68);
+			nebula.addColorStop(0, 'rgba(76, 58, 142, .30)'); nebula.addColorStop(.42, 'rgba(37, 60, 122, .19)'); nebula.addColorStop(1, 'rgba(3, 6, 17, 0)');
+			ctx.fillStyle = nebula; ctx.fillRect(0, 0, width, height);
+		}
 		if (!paperStyle && !flatStyle && (style === 'nebula' || style === 'aurora' || visual === 'deep-space' || visual === 'neural-bloom' || visual === 'mind-palace' || visual === 'archive-fog' || visual === 'soft-glow' || visual === 'thread-weaver')) {
 			const glow = ctx.createRadialGradient(width * 0.52, height * 0.48, 0, width * 0.52, height * 0.48, Math.max(width, height) * 0.72);
 			const cool = style === 'aurora' || visual === 'aqua-mint';
@@ -1104,7 +1109,13 @@ class SwarmGraphView extends ItemView {
 			const star = this.backgroundParticles[i];
 			const twinkle = motion.reduceMotion ? 0.55 : 0.3 + (Math.sin(this.frame * 0.012 + star.phase) + 1) * 0.3;
 			ctx.beginPath(); ctx.arc(star.x * width, star.y * height, star.size, 0, Math.PI * 2);
-			ctx.fillStyle = visual === 'matrix-hacker' ? `rgba(104,255,151,${twinkle})` : ['research-board', 'academic-light', 'ink-map'].includes(visual) ? `rgba(51,75,83,${twinkle * 0.5})` : `rgba(190,225,255,${twinkle})`; ctx.fill();
+			ctx.fillStyle = visual === 'matrix-hacker' ? `rgba(104,255,151,${twinkle})` : ['research-board', 'academic-light', 'ink-map'].includes(visual) ? `rgba(51,75,83,${twinkle * 0.5})` : `rgba(190,225,255,${visual === 'star-system' ? Math.min(1, twinkle * 1.35) : twinkle})`; ctx.fill();
+		}
+		if (visual === 'star-system') {
+			ctx.save(); ctx.translate(width * .5, height * .49);
+			const orbitColor = 'rgba(177, 191, 255, .13)'; ctx.strokeStyle = orbitColor; ctx.lineWidth = 1;
+			for (let ring = 0; ring < 3; ring++) { ctx.beginPath(); ctx.ellipse(0, 0, width * (.17 + ring * .085), height * (.075 + ring * .035), -.12 + ring * .08, 0, Math.PI * 2); ctx.stroke(); }
+			ctx.restore();
 		}
 	}
 
@@ -1142,7 +1153,7 @@ class SwarmGraphView extends ItemView {
 		ctx.restore();
 	}
 
-	drawClusterHalos(ctx, width, height) {
+	drawClusterHalos(ctx, width, height, visual = this.plugin.settings.visual) {
 		const groups = new Map();
 		for (const node of this.nodes) {
 			if (!groups.has(node.clusterName)) groups.set(node.clusterName, []);
@@ -1155,6 +1166,18 @@ class SwarmGraphView extends ItemView {
 			const cy = nodes.reduce((sum, node) => sum + node.screenY, 0) / nodes.length;
 			const radius = Math.min(190, Math.max(22, ...nodes.map((node) => Math.hypot(node.screenX - cx, node.screenY - cy) + 14)));
 			const color = palette[nodes[0].clusterId % palette.length];
+			if (visual === 'star-system') {
+				const orbitRadius = Math.max(36, radius * .82);
+				ctx.save(); ctx.strokeStyle = `rgba(${color}, .27)`; ctx.lineWidth = 1.2;
+				ctx.beginPath(); ctx.ellipse(cx, cy, orbitRadius, orbitRadius * .38, -.17, 0, Math.PI * 2); ctx.stroke();
+				const planetRadius = Math.max(8, Math.min(18, 6 + Math.sqrt(nodes.length) * 2.2));
+				const planet = ctx.createRadialGradient(cx - planetRadius * .35, cy - planetRadius * .4, 1, cx, cy, planetRadius * 1.25);
+				planet.addColorStop(0, `rgba(${color}, .98)`); planet.addColorStop(.68, `rgba(${color}, .82)`); planet.addColorStop(1, `rgba(${color}, .08)`);
+				ctx.beginPath(); ctx.arc(cx, cy, planetRadius * 1.55, 0, Math.PI * 2); ctx.fillStyle = `rgba(${color}, .12)`; ctx.fill();
+				ctx.beginPath(); ctx.arc(cx, cy, planetRadius, 0, Math.PI * 2); ctx.fillStyle = planet; ctx.fill();
+				ctx.strokeStyle = `rgba(225, 235, 255, .8)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(cx, cy, planetRadius * 1.65, planetRadius * .58, -.17, 0, Math.PI * 2); ctx.stroke();
+				ctx.restore(); continue;
+			}
 			ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2);
 			ctx.fillStyle = `rgba(${color},.035)`; ctx.fill();
 			ctx.strokeStyle = `rgba(${color},.16)`; ctx.lineWidth = 1; ctx.stroke();
@@ -1417,6 +1440,7 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 	async applyPreset(id) {
 		const presets = {
 			constellation: { visual: 'constellation', colors: 'clusters', motion: { animationStyle: 'cluster-orbit', animationSpeed: 0.55, cameraSpeed: 0.35, reduceMotion: false, glowEnabled: true } },
+			starSystem: { visual: 'star-system', colors: 'galaxy-core', motion: { animationStyle: 'cluster-orbit', animationSpeed: 0.48, cameraSpeed: 0.3, backgroundStyle: 'nebula', backgroundParticles: 90, reduceMotion: false, glowEnabled: true } },
 			deepSpace: { visual: 'deep-space', colors: 'deep-ocean', motion: { animationStyle: 'cluster-tour', animationSpeed: 0.38, cameraSpeed: 0.25, reduceMotion: false, glowEnabled: true } },
 			neon: { visual: 'neon', colors: 'aurora', motion: { animationStyle: 'orbit', lineAnimationStyle: 'pulse', animationSpeed: 0.9, cameraSpeed: 0.7, reduceMotion: false, glowEnabled: true } },
 			minimal: { visual: 'minimal', colors: 'monochrome', motion: { animationStyle: 'orbit', animationSpeed: 0.2, cameraSpeed: 0.15, reduceMotion: true, glowEnabled: false } },
@@ -1514,12 +1538,12 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 
 		this.section(containerEl, 'Appearance', true);
 		this.dropdown(this.currentSection, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
-			constellation: 'Constellation', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
+			constellation: 'Constellation', starSystem: 'Star System', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
 		}, (value) => this.plugin.applyPreset(value));
 		this.dropdown(this.currentSection, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
 			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
 			'archive-fog': 'Archive Fog', 'focus-lens': 'Focus Lens', 'thread-weaver': 'Thread Weaver', 'research-board': 'Research Board',
-			'signal-radar': 'Signal Radar', 'matrix-hacker': 'Matrix Hacker', 'star-map': 'Star Map', 'aqua-mint': 'Aqua Mint',
+			'signal-radar': 'Signal Radar', 'matrix-hacker': 'Matrix Hacker', 'star-map': 'Star Map', 'star-system': 'Star System', 'aqua-mint': 'Aqua Mint',
 			'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal', 'soft-glow': 'Soft Glow', 'neural-bloom': 'Neural Bloom',
 			'satellite-view': 'Satellite View', 'glass-minimal': 'Glass Minimal', 'academic-light': 'Academic Light', 'ink-map': 'Ink Map',
 		}, null, true);
