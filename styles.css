@@ -4,7 +4,7 @@
 	--swarm-pink: #ff73b4;
 	--swarm-border: rgba(137, 175, 194, .18);
 	position: relative; display: flex; flex-direction: column; height: 100%; min-height: 460px;
-	background: radial-gradient(ellipse at 50% 42%, rgba(23, 49, 66, .42), transparent 54%), #070a0f;
+	background: transparent;
 	color: #d7e1e9; font-family: var(--font-monospace); overflow: hidden;
 }
 .swarm-console * { box-sizing: border-box; }
@@ -23,8 +23,8 @@
 .swarm-quickbar { position: absolute; z-index: 2; top: 38px; left: 18px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 36px); }
 .swarm-quick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .swarm-quick-controls .is-hidden, .swarm-quickbar > .is-hidden { display: none; }
-.swarm-quick-menu-setting { border-top: 0; padding: 3px 0 !important; }
-.swarm-quick-menu-setting .setting-item-name { font-size: 10px; }
+.swarm-control-panel-body .setting-item.swarm-quick-menu-setting { border-top: 0; padding: 3px 0; }
+.swarm-control-panel-body .swarm-quick-menu-setting .setting-item-name { font-size: 10px; }
 .swarm-console-view .swarm-header.is-hidden, .swarm-console-view .swarm-quickbar.is-hidden, .swarm-console-view .swarm-show-menu.is-hidden, .swarm-console-view .swarm-graph-label.is-hidden, .swarm-console-view .swarm-graph-stats.is-hidden, .swarm-console-view .swarm-metric.is-hidden, .swarm-console-view .swarm-activity.is-hidden, .swarm-console-view .swarm-footer.is-hidden { display: none; }
 .swarm-show-menu { position: absolute; z-index: 2; top: 38px; left: 18px; }
 .swarm-search, .swarm-select { height: 28px; border: 1px solid var(--swarm-border); border-radius: 2px; background: rgba(8, 14, 20, .86); color: #aebfc9; font: 9px var(--font-monospace); }

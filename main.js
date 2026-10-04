@@ -124,8 +124,12 @@ const DEFAULT_SETTINGS = {
 		noteSpacing: 1,
 	},
 	motion: {
-		animationEnabled: true,
-		animationStyle: 'orbit',
+		animationEnabled: false,
+		noteMotionEnabled: true,
+		linkAnimationEnabled: true,
+		routeAnimationEnabled: true,
+		colorAnimationEnabled: true,
+		animationStyle: 'static',
 		qualityMode: 'auto',
 		animationSpeed: 0.55,
 		cameraSpeed: 0.35,
@@ -142,7 +146,7 @@ const DEFAULT_SETTINGS = {
 		reduceMotion: false,
 	},
 	display: {
-		showHeader: true,
+		showHeader: false,
 		showGraphLabel: true,
 		showGraphStats: true,
 		showQuickMenu: true,
@@ -150,6 +154,8 @@ const DEFAULT_SETTINGS = {
 		showFooter: true,
 		showLabels: true,
 		showLinks: true,
+		showSceneBackground: true,
+		showBackgroundParticles: true,
 		showFps: false,
 		showPerformanceMetrics: false,
 		labelSize: 10,
@@ -221,6 +227,7 @@ class SwarmGraphView extends ItemView {
 		this.lastDrawMs = 0;
 		this.averageDrawMs = 0;
 		this.performanceUiAt = 0;
+		this.lastFrameAt = 0;
 		this.spaceflightWaypoints = null;
 		this.spaceflightWasActive = false;
 		this.frame = 0;
@@ -255,12 +262,17 @@ class SwarmGraphView extends ItemView {
 		this.containerEl.addClass('swarm-console-view');
 		this.contentEl.empty();
 		this.root = this.contentEl.createDiv({ cls: 'swarm-console' });
+		this.plugin.settings.motion.animationEnabled = false;
 		this.buildShell();
+		await this.plugin.saveData(this.plugin.settings);
 		this.rebuildGraph();
 		this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
 		this.resizeObserver.observe(this.root);
 		this.resizeCanvas();
 		this.scheduleDraw();
+		this.registerDomEvent(document, 'visibilitychange', () => {
+			if (!document.hidden) this.scheduleDraw();
+		});
 	}
 
 	async onClose() {
@@ -308,7 +320,7 @@ class SwarmGraphView extends ItemView {
 		this.modeSelect.title = 'Choose a discovery route, then press START TRAVEL to follow the notes.';
 		this.modeSelect.addEventListener('change', () => this.plugin.setSetting(null, 'mode', this.modeSelect.value, true));
 		this.animationStyleSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-animation-style-select', attr: { 'aria-label': 'Note animation style' } });
-		for (const [value, label] of [['orbit', '3D Camera Orbit'], ['spaceflight', 'Spaceflight (Fly Through Notes)'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes'], ['swarm', 'Swarm'], ['chaos', 'Chaos'], ['blob-order', 'Blob Order']]) {
+		for (const [value, label] of [['static', 'Static Camera'], ['orbit', '3D Camera Orbit'], ['spaceflight', 'Spaceflight (Fly Through Notes)'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes'], ['swarm', 'Swarm'], ['chaos', 'Chaos'], ['blob-order', 'Blob Order']]) {
 			this.animationStyleSelect.createEl('option', { value, text: label });
 		}
 		this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
@@ -541,6 +553,7 @@ class SwarmGraphView extends ItemView {
 			linkedPaths.add(source);
 			for (const target of Object.keys(targets)) linkedPaths.add(target);
 		}
+		// Enumerate Markdown paths only when the user enables floating notes or selects Orphan Hunt.
 		const includeAllMarkdown = (graphSettings.includeFloatingNotes && discoverySettings.includeOrphans) || mode === 'orphan-hunt';
 		const candidateFiles = includeAllMarkdown
 			? this.app.vault.getMarkdownFiles()
@@ -758,8 +771,14 @@ class SwarmGraphView extends ItemView {
 			}
 			const routeEdges = this.edges.filter((edge) => routePairs.has(`${edge.source}|${edge.target}`));
 			const routeKeys = new Set(routeEdges.map((edge) => `${edge.source}|${edge.target}`));
-			const strongestEdges = [...this.edges].sort((a, b) => b.count - a.count).filter((edge) => !routeKeys.has(`${edge.source}|${edge.target}`));
-			this.renderEdges = [...routeEdges, ...strongestEdges].slice(0, 12000);
+			const edgeBudget = Math.max(0, 12000 - routeEdges.length);
+			const stride = Math.max(1, Math.ceil(this.edges.length / Math.max(1, edgeBudget)));
+			const spreadEdges = [];
+			for (let index = 0; index < this.edges.length && spreadEdges.length < edgeBudget; index += stride) {
+				const edge = this.edges[index];
+				if (!routeKeys.has(`${edge.source}|${edge.target}`)) spreadEdges.push(edge);
+			}
+			this.renderEdges = [...routeEdges, ...spreadEdges];
 		} else this.renderEdges = this.edges;
 		this.fullRenderEdges = this.renderEdges;
 		this.renderLevels = this.buildRenderLevels();
@@ -785,8 +804,8 @@ class SwarmGraphView extends ItemView {
 		if (requested === 'balanced' || requested === 'performance') return requested;
 		const nodeCount = this.nodes.length;
 		const edgeCount = this.edges.length;
-		if (nodeCount > 7000 || edgeCount > 28000 || this.averageDrawMs > 27) return 'performance';
-		if (nodeCount > 1600 || edgeCount > 6500 || this.averageDrawMs > 18) return 'balanced';
+		if (nodeCount > 600 || edgeCount > 1800 || this.averageDrawMs > 20) return 'performance';
+		if (nodeCount > 180 || edgeCount > 500 || this.averageDrawMs > 12) return 'balanced';
 		return 'full';
 	}
 
@@ -848,7 +867,7 @@ class SwarmGraphView extends ItemView {
 			const clusters = this.clusterGroups.map((group) => group.filter((node) => selectedPaths.has(node.path))).filter((group) => group.length);
 			return { nodes, edges: chosen, clusters };
 		};
-		return { full, balanced: buildLevel(3200, 1600), performance: buildLevel(1200, 500) };
+		return { full, balanced: buildLevel(1000, 420), performance: buildLevel(420, 150) };
 	}
 
 	selectRenderLevel(quality) {
@@ -1149,12 +1168,13 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		this.spaceflightWasActive = spaceflightActive;
-		this.drawBackground(ctx, width, height, motion);
-		if (spaceflightActive) this.drawSpaceflightStreaks(ctx, width, height, motion);
+		if (display.showSceneBackground) this.drawBackground(ctx, width, height, motion);
+		if (display.showSceneBackground && display.showBackgroundParticles && spaceflightActive) this.drawSpaceflightStreaks(ctx, width, height, motion);
 		const timelineMode = this.plugin.settings.visual === 'timeline-map';
-		const animatedSpin = timelineMode || this.manualCameraControl || spaceflightActive ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
-		let focusedNode = this.manualCameraControl || spaceflightActive ? null : this.nodeByPath.get(this.focusedPath);
-		if (!this.manualCameraControl && !focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
+		const staticCamera = motion.animationStyle === 'static';
+		const animatedSpin = staticCamera || timelineMode || this.manualCameraControl || spaceflightActive ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
+		let focusedNode = staticCamera || this.manualCameraControl || spaceflightActive ? null : this.nodeByPath.get(this.focusedPath);
+		if (!staticCamera && !this.manualCameraControl && !focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
 			const clusters = this.clusterTourTargets || [];
 			const pause = Math.max(1, motion.clusterPauseSeconds) * 1000;
 			const activeCluster = clusters[Math.floor(Date.now() / pause) % clusters.length];
@@ -1163,7 +1183,7 @@ class SwarmGraphView extends ItemView {
 		if (focusedNode) {
 			const yaw = Math.atan2(focusedNode.x, focusedNode.z) - animatedSpin;
 			const pitch = Math.atan2(focusedNode.y, Math.hypot(focusedNode.x, focusedNode.z));
-			const naturalTilt = !this.manualCameraControl && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0;
+			const naturalTilt = !staticCamera && !this.manualCameraControl && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0;
 			if (motion.animationEnabled) {
 				this.rotation += Math.atan2(Math.sin(yaw - this.rotation), Math.cos(yaw - this.rotation)) * 0.045;
 				this.tiltOffset += (pitch - naturalTilt - this.tiltOffset) * 0.045;
@@ -1173,7 +1193,7 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		const spin = spaceflightActive ? flightSpin : this.rotation + animatedSpin;
-		const tilt = spaceflightActive ? flightTilt : this.tiltOffset + (!this.manualCameraControl && !timelineMode && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
+		const tilt = spaceflightActive ? flightTilt : this.tiltOffset + (!staticCamera && !this.manualCameraControl && !timelineMode && motion.animationEnabled && !motion.reduceMotion ? Math.sin(this.frame * 0.0007) * 0.22 : 0);
 		const radius = (timelineMode ? width * 0.37 : Math.min(width, height) * (motion.reduceMotion ? 0.34 : 0.39)) * (this.zoom || 1);
 		const focalLength = 4.5 - motion.perspectiveStrength * 1.3;
 		if (this.plugin.settings.visual === 'timeline-map') this.drawTimelineAxis(ctx, width, height);
@@ -1181,7 +1201,7 @@ class SwarmGraphView extends ItemView {
 		for (const node of renderNodes) {
 			let nx = node.x; let ny = node.y; let nz = node.z;
 			if (flightCamera) { nx -= flightCamera.x; ny -= flightCamera.y; nz -= flightCamera.z; }
-			if (motion.animationEnabled && !motion.reduceMotion && ['cluster-orbit', 'swarm', 'blob-order'].includes(motion.animationStyle)) {
+			if (motion.animationEnabled && motion.noteMotionEnabled && !motion.reduceMotion && ['cluster-orbit', 'swarm', 'blob-order'].includes(motion.animationStyle)) {
 				const angle = this.frame * (motion.animationStyle === 'swarm' ? 0.0022 : 0.006) + node.clusterId * 0.73;
 				const dx = nx - node.clusterCenterX; const dz = nz - node.clusterCenterZ;
 				const turnX = dx * Math.cos(angle) - dz * Math.sin(angle);
@@ -1201,13 +1221,13 @@ class SwarmGraphView extends ItemView {
 					nz = node.clusterCenterZ + turnZ;
 				}
 			}
-			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'node-drift') {
+			if (motion.animationEnabled && motion.noteMotionEnabled && !motion.reduceMotion && motion.animationStyle === 'node-drift') {
 				const drift = motion.nodeDriftStrength;
 				nx += Math.sin(this.frame * 0.012 + node.phase) * drift;
 				ny += Math.cos(this.frame * 0.009 + node.phase) * drift;
 				nz += Math.sin(this.frame * 0.01 + node.phase * 1.7) * drift;
 			}
-			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'chaos') {
+			if (motion.animationEnabled && motion.noteMotionEnabled && !motion.reduceMotion && motion.animationStyle === 'chaos') {
 				const drift = motion.nodeDriftStrength * 1.8;
 				nx += (Math.sin(this.frame * 0.014 + node.phase) + Math.sin(this.frame * 0.006 + node.phase * 2.3) * 0.45) * drift;
 				ny += (Math.cos(this.frame * 0.011 + node.phase * 1.3) + Math.sin(this.frame * 0.005 + node.phase * 3.1) * 0.4) * drift;
@@ -1288,8 +1308,9 @@ class SwarmGraphView extends ItemView {
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : isClusterLink ? `rgba(190, 225, 255, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
-			const routeMotionEnabled = isRoute && motion.animationEnabled && !motion.reduceMotion && pathStyle !== 'static';
-			const useDashes = (animateLine && lineStyle === 'dashes' && motion.animationEnabled && !motion.reduceMotion) || (isRoute && pathStyle === 'dashes' && routeMotionEnabled);
+			const linkMotionEnabled = animateLine && motion.animationEnabled && motion.linkAnimationEnabled && !motion.reduceMotion;
+			const routeMotionEnabled = isRoute && motion.animationEnabled && motion.routeAnimationEnabled && !motion.reduceMotion && pathStyle !== 'static';
+			const useDashes = (linkMotionEnabled && lineStyle === 'dashes') || (isRoute && pathStyle === 'dashes' && routeMotionEnabled);
 			if (useDashes) {
 				ctx.setLineDash([5, 7]);
 				ctx.lineDashOffset = -(motion.animationEnabled ? this.frame : performance.now() * 0.06) * 0.12 * motion.connectionPulseSpeed;
@@ -1298,7 +1319,7 @@ class SwarmGraphView extends ItemView {
 			ctx.stroke();
 			ctx.shadowBlur = 0;
 			if (!simplifiedRendering || useDashes) ctx.setLineDash([]);
-			if (animateLine && motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
+			if (linkMotionEnabled && ['flow', 'pulse'].includes(lineStyle)) {
 				const progress = (animationClock * 0.008 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				const px = a.screenX + (b.screenX - a.screenX) * progress;
 				const py = a.screenY + (b.screenY - a.screenY) * progress;
@@ -1310,7 +1331,7 @@ class SwarmGraphView extends ItemView {
 				ctx.fill();
 				ctx.shadowBlur = 0;
 			}
-			if (animateLine && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
+			if (linkMotionEnabled && lineStyle === 'draw') {
 				const progress = (animationClock * 0.009 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
@@ -1459,7 +1480,7 @@ class SwarmGraphView extends ItemView {
 		const scheme = this.plugin.settings.colors;
 		const motion = this.plugin.settings.motion;
 		const degreeRatio = Math.max(0, Math.min(1, node.degree / 12));
-		const animationOffset = motion.animationEnabled && !motion.reduceMotion ? this.frame * motion.colorSpeed * 1.5 : 0;
+		const animationOffset = motion.animationEnabled && motion.colorAnimationEnabled && !motion.reduceMotion ? this.frame * motion.colorSpeed * 1.5 : 0;
 		if (this.cachedPaletteSource !== this.plugin.settings.customPalette) {
 			this.cachedPaletteSource = this.plugin.settings.customPalette;
 			this.cachedCustomPalette = (String(this.cachedPaletteSource || '').match(/#?[\da-f]{6}\b/gi) || []).map(colorFromHex).filter(Boolean);
@@ -1667,7 +1688,8 @@ class SwarmGraphView extends ItemView {
 			for (let x = width / 2 % spacing; x < width; x += spacing) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
 			for (let y = height / 2 % spacing; y < height; y += spacing) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
 		}
-		const count = Math.max(0, Math.min(140, motion.backgroundParticles));
+		const particleScale = this.plugin.settings.display.showBackgroundParticles ? (this.renderQuality === 'performance' ? 0.3 : this.renderQuality === 'balanced' ? 0.55 : 1) : 0;
+		const count = Math.max(0, Math.min(140, Math.floor(motion.backgroundParticles * particleScale)));
 		for (let i = 0; i < count; i++) {
 			const star = this.backgroundParticles[i];
 			const twinkle = motion.reduceMotion ? 0.55 : 0.3 + (Math.sin(this.frame * 0.012 + star.phase) + 1) * 0.3;
@@ -1683,7 +1705,8 @@ class SwarmGraphView extends ItemView {
 	}
 
 	drawSpaceflightStreaks(ctx, width, height, motion) {
-		const count = Math.min(this.backgroundParticles.length, Math.max(0, motion.backgroundParticles));
+		const particleScale = this.plugin.settings.display.showBackgroundParticles ? (this.renderQuality === 'performance' ? 0.3 : this.renderQuality === 'balanced' ? 0.55 : 1) : 0;
+		const count = Math.min(this.backgroundParticles.length, Math.max(0, Math.floor(motion.backgroundParticles * particleScale)));
 		if (!count) return;
 		const now = performance.now() / 1000;
 		const speed = Math.max(0.15, motion.cameraSpeed * motion.animationSpeed * 2.2);
@@ -1794,9 +1817,18 @@ class SwarmGraphView extends ItemView {
 	}
 
 	scheduleDraw() {
-		if (this.animation || !this.canvas?.isConnected) return;
+		if (this.animation || !this.canvas?.isConnected || document.hidden) return;
 		this.animation = window.requestAnimationFrame(() => {
 			this.animation = 0;
+			if (document.hidden) return;
+			const fps = this.renderQuality === 'performance' ? 24 : this.renderQuality === 'balanced' ? 30 : 30;
+			const minimumFrameTime = 1000 / fps;
+			const now = performance.now();
+			if (this.lastFrameAt && now - this.lastFrameAt < minimumFrameTime) {
+				this.scheduleDraw();
+				return;
+			}
+			this.lastFrameAt = now;
 			this.draw();
 		});
 	}
@@ -2041,8 +2073,8 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 
 	async setAnimationStyle(style) {
 		this.settings.motion.animationStyle = style;
-		this.settings.motion.animationEnabled = true;
-		this.settings.motion.reduceMotion = false;
+		this.settings.motion.animationEnabled = style !== 'static';
+		if (style !== 'static') this.settings.motion.reduceMotion = false;
 		await this.saveSettings(true);
 	}
 
@@ -2185,6 +2217,8 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 			horizon: 'Horizon Perspective', 'depth-bands': 'Depth Bands', topographic: 'Topographic Contours', blueprint: 'Blueprint Grid', paper: 'Warm Paper', black: 'Black', white: 'White',
 		});
 		this.slider(this.currentSection, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
+		this.toggle(this.currentSection, 'Scene background', 'Show the selected scene color, background effects, and depth backdrop.', 'display', 'showSceneBackground');
+		this.toggle(this.currentSection, 'Background particles', 'Show background stars and Spaceflight streaks.', 'display', 'showBackgroundParticles');
 		this.toggle(this.currentSection, 'Node labels', 'Show note names. All labels appear in smaller graphs; large graphs sample labels automatically. Hover a note to reveal its name.', 'display', 'showLabels');
 		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
 		this.toggle(this.currentSection, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
@@ -2210,8 +2244,12 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.section(containerEl, 'Motion');
 		this.dropdown(this.currentSection, 'Rendering quality', 'Auto adapts detail to graph size and drawing time. Balanced and Performance use progressively fewer visual details.', 'motion', 'qualityMode', { auto: 'Auto', balanced: 'Balanced', performance: 'Performance' });
 		this.toggle(this.currentSection, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
+		this.toggle(this.currentSection, 'Moving notes', 'Enable Swarm, Chaos, Blob Order, Moving Notes, and Notes Orbit Clusters motion.', 'motion', 'noteMotionEnabled');
+		this.toggle(this.currentSection, 'Animated links', 'Enable flowing particles, pulses, drawing lines, and moving dashes on note links.', 'motion', 'linkAnimationEnabled');
+		this.toggle(this.currentSection, 'Animated route', 'Enable motion effects on the selected note path.', 'motion', 'routeAnimationEnabled');
+		this.toggle(this.currentSection, 'Animated colors', 'Allow animated color profiles to cycle through their colors.', 'motion', 'colorAnimationEnabled');
 		this.dropdown(this.currentSection, '3D animation style', 'Spaceflight moves the camera through linked notes with rushing star streaks. Other styles orbit the camera, clusters, or individual notes.', 'motion', 'animationStyle', {
-			orbit: '3D camera orbit', spaceflight: 'Spaceflight (fly through notes)', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
+			static: 'Static camera', orbit: '3D camera orbit', spaceflight: 'Spaceflight (fly through notes)', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
 			swarm: 'Swarm', chaos: 'Chaos', 'blob-order': 'Blob Order',
 		}, (value) => this.plugin.setAnimationStyle(value));
 		this.slider(this.currentSection, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
@@ -2227,7 +2265,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(this.currentSection, 'Node glow', 'Show a soft glow around notes.', 'motion', 'glowEnabled');
 
 		this.section(containerEl, 'Discovery');
-		this.dropdown(this.currentSection, 'Mode', 'Focus on a particular way of exploring notes.', null, 'mode', {
+		this.dropdown(this.currentSection, 'Mode', 'Focus on a particular way of exploring notes. Orphan Hunt scans Markdown note paths to find notes without links.', null, 'mode', {
 			wander: 'Wander', 'path-journey': 'Path journey', 'recent-activity': 'Recent activity', 'forgotten-knowledge': 'Forgotten knowledge',
 			'hub-explorer': 'Hub explorer', 'hidden-gems': 'Hidden gems', 'orphan-hunt': 'Orphan hunt',
 		}, null, true);
