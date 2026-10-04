@@ -895,10 +895,11 @@ class SwarmGraphView extends ItemView {
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
-			const useDashes = animateLine && (lineStyle === 'dashes' || (isRoute && pathStyle === 'dashes')) && motion.animationEnabled && !motion.reduceMotion;
+			const routeMotionEnabled = isRoute && !motion.reduceMotion && pathStyle !== 'static';
+			const useDashes = (animateLine && lineStyle === 'dashes' && motion.animationEnabled && !motion.reduceMotion) || (isRoute && pathStyle === 'dashes' && routeMotionEnabled);
 			if (useDashes) {
 				ctx.setLineDash([5, 7]);
-				ctx.lineDashOffset = -this.frame * 0.12 * motion.connectionPulseSpeed;
+				ctx.lineDashOffset = -(motion.animationEnabled ? this.frame : performance.now() * 0.06) * 0.12 * motion.connectionPulseSpeed;
 			}
 			if (isRoute && pathStyle === 'glow') { ctx.shadowColor = 'rgba(255,191,91,.85)'; ctx.shadowBlur = 10; }
 			ctx.stroke();
@@ -922,18 +923,27 @@ class SwarmGraphView extends ItemView {
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
 				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
 			}
-			if (isRoute && motion.animationEnabled && !motion.reduceMotion && ['comet', 'draw'].includes(pathStyle)) {
+			if (routeMotionEnabled && ['comet', 'draw'].includes(pathStyle)) {
 				const sourceIndex = routeOrder.get(edge.source) ?? -1;
 				const targetIndex = routeOrder.get(edge.target) ?? -1;
 				const routeIndex = Math.min(sourceIndex, targetIndex);
 				const forward = sourceIndex >= 0 && sourceIndex < targetIndex;
 				const start = forward ? a : b; const end = forward ? b : a;
-				const progress = (this.frame * 0.004 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
-				const px = start.screenX + (end.screenX - start.screenX) * progress;
-				const py = start.screenY + (end.screenY - start.screenY) * progress;
+				const routeClock = motion.animationEnabled ? this.frame : performance.now() * 0.06;
+				const phase = (routeClock * 0.004 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
 				ctx.beginPath();
-				if (pathStyle === 'draw') { ctx.moveTo(start.screenX, start.screenY); ctx.lineTo(px, py); ctx.strokeStyle = 'rgba(255,225,155,.95)'; ctx.lineWidth = 2.2; ctx.stroke(); }
-				else { ctx.arc(px, py, 3.4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,229,166,.96)'; ctx.shadowColor = 'rgba(255,191,91,.9)'; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0; }
+				if (pathStyle === 'draw') {
+					const progress = phase < 0.72 ? phase / 0.72 : 1;
+					const px = start.screenX + (end.screenX - start.screenX) * progress;
+					const py = start.screenY + (end.screenY - start.screenY) * progress;
+					ctx.moveTo(start.screenX, start.screenY); ctx.lineTo(px, py);
+					ctx.strokeStyle = 'rgba(255,225,155,.98)'; ctx.lineWidth = 3; ctx.shadowColor = 'rgba(255,191,91,.95)'; ctx.shadowBlur = 9; ctx.stroke(); ctx.shadowBlur = 0;
+				} else {
+					const progress = phase;
+					const px = start.screenX + (end.screenX - start.screenX) * progress;
+					const py = start.screenY + (end.screenY - start.screenY) * progress;
+					ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,229,166,.98)'; ctx.shadowColor = 'rgba(255,191,91,.95)'; ctx.shadowBlur = 13; ctx.fill(); ctx.shadowBlur = 0;
+				}
 			}
 		}
 		const orderedNodes = simplifiedRendering ? this.nodes : [...this.nodes].sort((a, b) => a.depth - b.depth);
@@ -991,7 +1001,7 @@ class SwarmGraphView extends ItemView {
 				this.fpsLast = now;
 			}
 		} else this.fpsIndicator?.setText('');
-		if (motion.animationEnabled) this.scheduleDraw();
+		if (motion.animationEnabled || (interaction.pathPreview.length && motion.pathAnimationStyle !== 'static' && !motion.reduceMotion)) this.scheduleDraw();
 	}
 
 	getNodeColor(node) {
