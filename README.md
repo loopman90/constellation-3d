@@ -1,23 +1,38 @@
 # Constellation 3D
 
-Constellation 3D turns the links between your Obsidian notes into an interactive, animated 3D space. Each note is a node; links between notes are the lines connecting them. Move through the space, follow paths, and spot the folders and notes that shape your knowledge network.
+**Your Obsidian notes, connected in a 3D space.**
 
-The plugin reads Markdown note paths, modification times, tags, and Obsidian's local resolved links to build the graph and counters. It uses Obsidian's metadata cache for note links and cached tag fields; it does not read note bodies or send vault data to a server. It uses the cached links to find connected notes. It enumerates all Markdown notes only when **Include floating notes** is enabled (off by default) or **Orphan Hunt** is selected, since those features need to find unlinked notes.
+[Download the plugin](https://github.com/loopman90/constellation-3d/releases/latest) · [Installation guide](https://loopman90.github.io/constellation-3d/) · [Report an issue](https://github.com/loopman90/constellation-3d/issues)
 
-## Screenshots
+## About the plugin
 
-![A focused Star Map view showing connected notes and highlighted cluster nodes.](site/images/star-map-cluster-focus.png)
+Constellation 3D is an Obsidian plugin that turns your vault into an interactive 3D map. Each note becomes a node, its links become connections, and folders or tags become clusters. Rotate, pan, and zoom to explore how your ideas fit together, then click a node to open its note.
+
+Use it to discover overlooked connections, follow a route between notes, or focus on one part of a large vault. Customize the scene with visual styles, color profiles, backgrounds, and optional animations—from gently moving notes to a camera flight through your network. The Quick Menu and Control Panel let you adjust the view inside the graph.
+
+The graph opens with a static camera and animation paused. Performance controls let you limit visible notes, connections, and animation frame rate. Your vault data stays local.
 
 <p align="center">
-  <img src="site/images/rainbow-cluster-orbits.png" alt="Rainbow-colored note clusters arranged as orbiting groups." width="49%">
-  <img src="site/images/monochrome-network.png" alt="A monochrome view of a dense vault network." width="49%">
-</p>
-<p align="center">
-  <img src="site/images/large-vault-green.png" alt="A large vault graph with green notes and many connections." width="49%">
-  <img src="site/images/large-vault-blue.png" alt="A large vault graph with blue and cyan notes and many connections." width="49%">
+  <a href="site/images/star-map-cluster-focus.png"><img src="site/images/star-map-cluster-focus.png" alt="Constellation 3D showing connected notes in a dark Star Map view." width="900"></a>
 </p>
 
-## What you can do
+*An actual vault in Constellation 3D. Notes form clusters, with links connecting the groups.*
+
+## Features at a glance
+
+| Feature | What you can do |
+| --- | --- |
+| **3D navigation** | Rotate, pan, zoom, drag notes, and use keyboard camera controls. |
+| **Clusters** | Group by folder or tag; adjust spacing; collapse, isolate, or hide groups. |
+| **Search and filters** | Find notes by name and filter by folder, tag, date, or connection count. |
+| **Visual customization** | Choose 22 visual styles, color profiles, backgrounds, labels, glow, and depth guides. |
+| **Optional animations** | Choose Spaceflight, Swarm, Chaos, Blob Order, orbiting notes, and animated connections. |
+| **Paths and discovery** | Highlight linked routes and explore recent notes, forgotten notes, hubs, and orphans. |
+| **Controls in the graph** | Customize the Quick Menu and change settings without leaving the view. |
+| **Performance settings** | Set rendering quality, visible note and link limits, and animation frame rate. |
+
+<details>
+<summary><strong>View the full feature list</strong></summary>
 
 - **Explore your graph:** switch between the whole vault, notes around the active note, and the active note's direct neighbors. Set how far local exploration reaches.
 - **Find notes:** search by note name, then narrow the graph by folder, tag, last-modified date, or minimum number of connections. Folder filters are case-insensitive path matches; tag filters match note tags and frontmatter tags.
@@ -35,6 +50,33 @@ The plugin reads Markdown note paths, modification times, tags, and Obsidian's l
 - **Customize the interface:** turn the header, graph title, node/link totals, Quick Menu, and bottom dashboard on or off. Choose each Quick Menu button and selector independently, then show only the counters and recent changes you want, alongside the existing label, link, icon, depth, and halo controls.
 - **Keep large graphs responsive:** choose **Auto**, **Balanced**, or **Performance** under Control Panel → Performance → Rendering quality. Set **Maximum visible notes**, **Maximum visible links**, and **Animation frame rate** in the same section. These budgets limit drawing while the complete graph remains available for filtering and route lookup; pinned and route notes may exceed the note budget. Auto adapts node and link detail to graph size and drawing time; balanced modes keep active, pinned, route, and cluster representative notes visible. Enable **Performance metrics** under Performance to see graph build time, draw time, and the current quality. Search waits briefly until you pause typing before rebuilding the graph. For extra smoothness, pause animation or turn down background particles and link display.
 - **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view, while **Optimize View** automatically frames all currently visible notes.
+
+</details>
+
+## Screenshots
+
+<details>
+<summary><strong>View four more screenshots</strong></summary>
+
+All screenshots below use the same display width. Click an image to open the original.
+
+### Multicolor clusters
+
+<p align="center"><a href="site/images/rainbow-cluster-orbits.png"><img src="site/images/rainbow-cluster-orbits.png" alt="Multicolor note groups with a starfield background and depth guides." width="900"></a></p>
+
+### Monochrome network
+
+<p align="center"><a href="site/images/monochrome-network.png"><img src="site/images/monochrome-network.png" alt="A dense vault network displayed with a monochrome palette." width="900"></a></p>
+
+### Large vault — green palette
+
+<p align="center"><a href="site/images/large-vault-green.png"><img src="site/images/large-vault-green.png" alt="A large vault with green nodes, dense connections, and the Quick Menu open." width="900"></a></p>
+
+### Large vault — blue palette
+
+<p align="center"><a href="site/images/large-vault-blue.png"><img src="site/images/large-vault-blue.png" alt="A large vault network displayed with blue and cyan notes." width="900"></a></p>
+
+</details>
 
 ## Install in Obsidian
 
@@ -81,6 +123,10 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 - **Animate a route:** choose **Glow**, **Traveling comet**, **Draw the route**, or **Moving dashes** under **Control Panel → Motion → Route animation**. Route motion continues when the general 3D animation is paused; **Reduce motion** pauses it.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
 - Click **Control Panel** in the graph toolbar to adjust Camera, Performance, Appearance, Graph, Motion, Discovery, Interface, and Hidden Items settings without opening Obsidian's main settings. The groups are collapsible; Camera, Performance, and Motion open first, while Appearance and Graph are available when needed. Plugin configuration is also available under **Settings → Constellation 3D**.
+
+## Privacy and vault access
+
+The plugin reads Markdown note paths, modification times, tags, and Obsidian's local resolved links to build the graph and counters. It uses Obsidian's metadata cache for note links and cached tag fields; it does not read note bodies or send vault data to a server. It uses the cached links to find connected notes. It enumerates all Markdown notes only when **Include floating notes** is enabled (off by default) or **Orphan Hunt** is selected, since those features need to find unlinked notes.
 
 ## Releases and development
 
