@@ -427,8 +427,19 @@ class SwarmGraphView extends ItemView {
 		const now = Date.now();
 		const folderTokens = graphSettings.folderFilter.split(/[,;\n]/).map((value) => value.trim().toLowerCase()).filter(Boolean);
 		const tagTokens = graphSettings.tagFilter.split(/[,;\n]/).map((value) => value.trim().replace(/^#/, '').toLowerCase()).filter(Boolean);
+		const mode = this.plugin.settings.mode;
+		const resolvedLinks = this.app.metadataCache.resolvedLinks;
+		const linkedPaths = new Set();
+		for (const [source, targets] of Object.entries(resolvedLinks)) {
+			linkedPaths.add(source);
+			for (const target of Object.keys(targets)) linkedPaths.add(target);
+		}
+		const includeAllMarkdown = (graphSettings.includeFloatingNotes && discoverySettings.includeOrphans) || mode === 'orphan-hunt';
+		const candidateFiles = includeAllMarkdown
+			? this.app.vault.getMarkdownFiles()
+			: [...linkedPaths].map((path) => this.app.vault.getAbstractFileByPath(path)).filter((file) => file?.extension === 'md');
 		const fileCaches = new Map();
-		const files = this.app.vault.getMarkdownFiles().filter((file) => {
+		const files = candidateFiles.filter((file) => {
 			if (folderTokens.length && !folderTokens.some((token) => file.path.toLowerCase().includes(token))) return false;
 			if (graphSettings.dateFilter === 'recent' && now - file.stat.mtime > discoverySettings.recentDays * 86400000) return false;
 			if (graphSettings.dateFilter === 'forgotten' && now - file.stat.mtime < discoverySettings.forgottenDays * 86400000) return false;
@@ -445,8 +456,7 @@ class SwarmGraphView extends ItemView {
 		const byPath = new Map(files.map((file) => [file.path, file]));
 		const degree = new Map(files.map((file) => [file.path, 0]));
 		const edges = [];
-		const links = this.app.metadataCache.resolvedLinks;
-		for (const [source, targets] of Object.entries(links)) {
+		for (const [source, targets] of Object.entries(resolvedLinks)) {
 			for (const [target, count] of Object.entries(targets)) {
 				if (!byPath.has(source) || !byPath.has(target)) continue;
 				edges.push({ source, target, count });
@@ -473,11 +483,10 @@ class SwarmGraphView extends ItemView {
 				frontier = next;
 				if (!frontier.length) break;
 			}
-			if (graphSettings.includeFloatingNotes && discoverySettings.includeOrphans) {
-				for (const file of files) if ((degree.get(file.path) || 0) === 0) visiblePaths.add(file.path);
-			}
 		}
-		const mode = this.plugin.settings.mode;
+		if (graphSettings.includeFloatingNotes && discoverySettings.includeOrphans && mode !== 'orphan-hunt') {
+			for (const file of candidateFiles) if ((degree.get(file.path) || 0) === 0 && (graphSettings.scope === 'global' || visiblePaths.has(file.path))) visiblePaths.add(file.path);
+		}
 		const minimumConnections = Math.max(graphSettings.minimumConnections, 0);
 		let visibleFiles = files.filter((file) => {
 			const connections = degree.get(file.path) || 0;
@@ -628,14 +637,15 @@ class SwarmGraphView extends ItemView {
 					routePairs.add(`${target}|${source}`);
 				}
 			}
-			const strongestEdges = [...this.edges].sort((a, b) => b.count - a.count).slice(0, 12000);
-			const requiredRouteEdges = this.edges.filter((edge) => routePairs.has(`${edge.source}|${edge.target}`));
-			this.renderEdges = [...new Map([...strongestEdges, ...requiredRouteEdges].map((edge) => [`${edge.source}|${edge.target}`, edge])).values()];
+			const routeEdges = this.edges.filter((edge) => routePairs.has(`${edge.source}|${edge.target}`));
+			const routeKeys = new Set(routeEdges.map((edge) => `${edge.source}|${edge.target}`));
+			const strongestEdges = [...this.edges].sort((a, b) => b.count - a.count).filter((edge) => !routeKeys.has(`${edge.source}|${edge.target}`));
+			this.renderEdges = [...routeEdges, ...strongestEdges].slice(0, 12000);
 		} else this.renderEdges = this.edges;
 		this.nodeCount?.setText(String(this.nodes.length));
 		this.edgeCount?.setText(String(this.edges.length));
 		this.updatePathControls();
-		this.updateMetrics(files);
+		this.updateMetrics(visibleFiles);
 		this.renderActivity();
 		this.controlSettings?.refreshVisibilityManager();
 		if (this.scopeSelect) this.scopeSelect.value = graphSettings.scope;
@@ -1015,7 +1025,7 @@ class SwarmGraphView extends ItemView {
 			ctx.fill();
 			ctx.restore();
 			if (display.showNodeIcons && nodeRadius > 3) {
-				ctx.fillStyle = '#071015';
+				ctx.fillStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual) || motion.backgroundStyle === 'white' ? '#17222b' : '#071015';
 				ctx.font = `600 ${Math.max(5, nodeRadius * 1.15)}px sans-serif`;
 				ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 				ctx.fillText(node.name.slice(0, 1).toUpperCase(), node.screenX, node.screenY + 0.3);
@@ -1032,7 +1042,7 @@ class SwarmGraphView extends ItemView {
 			}
 			if (display.showLabels && (node.hovered || node.focused || isRouteNode || (!simplifiedRendering && node.degree > 2))) {
 				ctx.font = `${display.labelSize}px var(--font-monospace)`;
-				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual);
+				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual) || this.plugin.settings.motion.backgroundStyle === 'white';
 				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? `rgba(35,48,55,${Math.max(0.52, 0.66 + node.depth * 0.2)})` : visual === 'matrix-hacker' ? 'rgba(156,255,178,.86)' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
 				ctx.fillText(node.name.slice(0, 26), node.screenX + nodeRadius + 5, node.screenY + 3);
 			}
@@ -1492,6 +1502,10 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		this.settings.visual = preset.visual;
 		this.settings.colors = preset.colors;
 		this.settings.motion = { ...this.settings.motion, ...preset.motion };
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			leaf.view.animationStyleSelect.value = this.settings.motion.animationStyle;
+			leaf.view.colorSelect.value = this.settings.colors;
+		}
 		await this.saveSettings();
 	}
 
