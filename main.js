@@ -1615,7 +1615,9 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(this.currentSection, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
 		this.slider(this.currentSection, 'Link thickness', 'Scale the lines between linked notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
 
-		this.section(containerEl, 'Graph');
+		this.section(containerEl, 'Graph', true);
+		this.slider(this.currentSection, 'Node distance', 'Set how far apart notes appear in the 3D layouts from 0.1× to 6×.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
+		this.slider(this.currentSection, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6×. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
 		this.dropdown(this.currentSection, 'Scope', 'Show the whole vault or notes around the active note.', 'graph', 'scope', { global: 'Global', local: 'Local', current: 'Current note' }, null, true);
 		this.slider(this.currentSection, 'Local depth', 'Number of link steps around the active note.', 'graph', 'localDepth', 1, 10, 1, true);
 		this.text(this.currentSection, 'Folder filter', 'Comma-separated folder names or path fragments.', 'graph', 'folderFilter', true);
@@ -1624,8 +1626,6 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(this.currentSection, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
 		this.toggle(this.currentSection, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(this.currentSection, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
-		this.slider(this.currentSection, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6×. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
-		this.slider(this.currentSection, 'Note spacing', 'Spread notes across the 3D layouts from 0.1× to 6×.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
 
 		this.section(containerEl, 'Motion');
 		this.toggle(this.currentSection, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
