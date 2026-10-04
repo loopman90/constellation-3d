@@ -303,8 +303,7 @@ class SwarmGraphView extends ItemView {
 		closePanelButton.addEventListener('click', () => this.toggleControlPanel(false));
 		this.controlPanelBody = this.controlPanel.createDiv({ cls: 'swarm-control-panel-body' });
 		this.controlSettings = new SwarmConsoleSettingTab(this.app, this.plugin);
-		this.controlSettings.renderCameraControls(this.controlPanelBody, this);
-		this.controlSettings.renderSettings(this.controlPanelBody);
+		this.controlSettings.renderSettings(this.controlPanelBody, this);
 		this.updateControlLabels();
 		this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
 		this.canvas.addEventListener('pointerleave', () => this.tooltip.addClass('is-hidden'));
@@ -1450,11 +1449,12 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.renderSettings(containerEl);
 	}
 
-	renderCameraControls(containerEl, view) {
+	renderCameraControls(containerEl, view, compact = false) {
 		this.cameraView = view;
-		this.section(containerEl, 'Camera');
-		containerEl.createEl('p', { text: 'Adjust the viewing angle and zoom. Manual angle controls pause automatic camera turning until you resume it or reset the camera.' });
-		new Setting(containerEl).setName('Horizontal rotation').setDesc('Turn the camera around the note space.').addSlider((slider) => {
+		const cameraContainer = compact ? containerEl.createDiv({ cls: 'swarm-camera-controls' }) : containerEl;
+		this.section(cameraContainer, 'Camera');
+		if (!compact) cameraContainer.createEl('p', { text: 'Adjust the viewing angle and zoom. Manual angle controls pause automatic camera turning until you resume it or reset the camera.' });
+		new Setting(cameraContainer).setName('Horizontal rotation').setDesc('Turn the camera around the note space.').addSlider((slider) => {
 			this.cameraRotationSlider = slider;
 			slider.setLimits(0, 359, 1).setValue(this.rotationDegrees()).setDynamicTooltip().onChange((value) => {
 				view.manualCameraControl = true;
@@ -1462,7 +1462,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 				view.scheduleDraw();
 			});
 		});
-		new Setting(containerEl).setName('Vertical angle').setDesc('Tilt the camera up or down.').addSlider((slider) => {
+		new Setting(cameraContainer).setName('Vertical angle').setDesc('Tilt the camera up or down.').addSlider((slider) => {
 			this.cameraTiltSlider = slider;
 			slider.setLimits(-55, 55, 1).setValue(Math.round(view.tiltOffset * 180 / Math.PI)).setDynamicTooltip().onChange((value) => {
 				view.manualCameraControl = true;
@@ -1470,20 +1470,20 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 				view.scheduleDraw();
 			});
 		});
-		new Setting(containerEl).setName('Zoom').setDesc('Set the camera zoom from 0.1× to 12×.').addSlider((slider) => {
+		new Setting(cameraContainer).setName('Zoom').setDesc('Set the camera zoom from 0.1× to 12×.').addSlider((slider) => {
 			this.cameraZoomSlider = slider;
 			slider.setLimits(0.1, 12, 0.1).setValue(view.zoom).setDynamicTooltip().onChange((value) => {
 				view.zoom = value;
 				view.scheduleDraw();
 			});
 		});
-		new Setting(containerEl).addButton((button) => button
+		new Setting(cameraContainer).addButton((button) => button
 			.setButtonText('Resume automatic camera')
 			.onClick(() => {
 				view.manualCameraControl = false;
 				view.scheduleDraw();
 			}));
-		new Setting(containerEl).addButton((button) => button
+		new Setting(cameraContainer).addButton((button) => button
 			.setButtonText('Reset camera')
 			.setCta()
 			.onClick(() => view.fitNetwork()));
@@ -1501,83 +1501,88 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.cameraZoomSlider?.setValue(this.cameraView.zoom);
 	}
 
-	renderSettings(containerEl) {
-		this.section(containerEl, 'Quick');
-		this.dropdown(containerEl, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
+	renderSettings(containerEl, view = null) {
+		const cameraSection = this.section(containerEl, 'Camera', true);
+		if (view) this.renderCameraControls(cameraSection, view, false);
+
+		this.section(containerEl, 'Appearance', true);
+		this.dropdown(this.currentSection, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
 			constellation: 'Constellation', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
 		}, (value) => this.plugin.applyPreset(value));
-		this.section(containerEl, 'Graph');
-		this.dropdown(containerEl, 'Graph scope', 'Show the whole vault or notes around the active note.', 'graph', 'scope', { global: 'Global', local: 'Local', current: 'Current note' }, null, true);
-		this.slider(containerEl, 'Local depth', 'Number of link steps around the active note.', 'graph', 'localDepth', 1, 10, 1, true);
-		this.text(containerEl, 'Folder filter', 'Comma-separated folder names or path fragments.', 'graph', 'folderFilter', true);
-		this.text(containerEl, 'Tag filter', 'Comma-separated tags from note content or frontmatter.', 'graph', 'tagFilter', true);
-		this.dropdown(containerEl, 'Date filter', 'Limit notes by their last modified date.', 'graph', 'dateFilter', { all: 'All notes', recent: 'Recently modified', forgotten: 'Long time ago' }, null, true);
-		this.slider(containerEl, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
-		this.toggle(containerEl, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
-		this.dropdown(containerEl, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
-		this.slider(containerEl, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6× in Cluster orbit, Cluster tour, Mind Palace, and Timeline Map layouts. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
-		this.slider(containerEl, 'Note spacing', 'Spread notes farther apart or bring them closer together across the 3D layouts (0.1× to 6×). Zoom out to fit widely spaced notes on screen.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
-		this.section(containerEl, 'Visual');
-		this.dropdown(containerEl, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
+		this.dropdown(this.currentSection, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
 			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
 			'archive-fog': 'Archive Fog', 'focus-lens': 'Focus Lens', 'thread-weaver': 'Thread Weaver', 'research-board': 'Research Board',
 			'signal-radar': 'Signal Radar', 'matrix-hacker': 'Matrix Hacker', 'star-map': 'Star Map', 'aqua-mint': 'Aqua Mint',
 			'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal', 'soft-glow': 'Soft Glow', 'neural-bloom': 'Neural Bloom',
 			'satellite-view': 'Satellite View', 'glass-minimal': 'Glass Minimal', 'academic-light': 'Academic Light', 'ink-map': 'Ink Map',
 		}, null, true);
-		this.dropdown(containerEl, 'Color scheme', 'Choose a color behavior independently of the visual style.', null, 'colors', COLOR_SCHEME_OPTIONS);
-		this.text(containerEl, 'Custom palette colors', 'Enter comma-separated HEX colors, for example #67e0dd, #ff73b4, #ffc75f. Used by Custom, Single, Dual, and Multi Color schemes.', null, 'customPalette');
-		this.section(containerEl, 'Background');
-		this.dropdown(containerEl, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Star map grid', void: 'Deep void' });
-		this.slider(containerEl, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
+		this.dropdown(this.currentSection, 'Color scheme', 'Choose a color behavior independently of the visual style.', null, 'colors', COLOR_SCHEME_OPTIONS);
+		this.text(this.currentSection, 'Custom palette colors', 'Enter comma-separated HEX colors.', null, 'customPalette');
+		this.dropdown(this.currentSection, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Star map grid', void: 'Deep void' });
+		this.slider(this.currentSection, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
+		this.toggle(this.currentSection, 'Node labels', 'Show note names on the graph.', 'display', 'showLabels');
+		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
+		this.toggle(this.currentSection, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
+		this.toggle(this.currentSection, 'Depth layers', 'Draw guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
+		this.toggle(this.currentSection, 'Cluster halos', 'Draw a boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
+		this.slider(this.currentSection, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
+		this.slider(this.currentSection, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
+		this.slider(this.currentSection, 'Link thickness', 'Scale the lines between linked notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
+
+		this.section(containerEl, 'Graph');
+		this.dropdown(this.currentSection, 'Scope', 'Show the whole vault or notes around the active note.', 'graph', 'scope', { global: 'Global', local: 'Local', current: 'Current note' }, null, true);
+		this.slider(this.currentSection, 'Local depth', 'Number of link steps around the active note.', 'graph', 'localDepth', 1, 10, 1, true);
+		this.text(this.currentSection, 'Folder filter', 'Comma-separated folder names or path fragments.', 'graph', 'folderFilter', true);
+		this.text(this.currentSection, 'Tag filter', 'Comma-separated tags from note content or frontmatter.', 'graph', 'tagFilter', true);
+		this.dropdown(this.currentSection, 'Date filter', 'Limit notes by their last modified date.', 'graph', 'dateFilter', { all: 'All notes', recent: 'Recently modified', forgotten: 'Long time ago' }, null, true);
+		this.slider(this.currentSection, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
+		this.toggle(this.currentSection, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
+		this.dropdown(this.currentSection, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
+		this.slider(this.currentSection, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6×. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
+		this.slider(this.currentSection, 'Note spacing', 'Spread notes across the 3D layouts from 0.1× to 6×.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
+
 		this.section(containerEl, 'Motion');
-		this.toggle(containerEl, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
-		this.dropdown(containerEl, '3D animation style', 'Choose how notes or the camera move. Selecting a style enables Animation. Reduce Motion pauses Moving Notes and Notes Orbit Clusters.', 'motion', 'animationStyle', {
+		this.toggle(this.currentSection, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
+		this.dropdown(this.currentSection, '3D animation style', 'Choose camera orbit, cluster orbit, cluster tour, or moving notes.', 'motion', 'animationStyle', {
 			orbit: '3D camera orbit', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
 		}, (value) => this.plugin.setAnimationStyle(value));
-		this.slider(containerEl, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
-		this.slider(containerEl, 'Color animation speed', 'Set how fast Rainbow Flow and Animated Gradient cycle.', 'motion', 'colorSpeed', 0.05, 2, 0.05);
-		this.slider(containerEl, 'Camera speed', 'Set how quickly the 3D view turns.', 'motion', 'cameraSpeed', 0.1, 1, 0.05);
-		this.slider(containerEl, 'Cluster visit interval (seconds)', 'How long the camera stays with each folder cluster in Cluster tour.', 'motion', 'clusterPauseSeconds', 2, 30, 1);
-		this.slider(containerEl, 'Moving note distance', 'Set how far individual notes drift in Moving notes mode.', 'motion', 'nodeDriftStrength', 0.01, 0.5, 0.01);
-		this.slider(containerEl, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
-		this.dropdown(containerEl, 'Link animation', 'Choose how motion travels along connections.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' });
-		this.dropdown(containerEl, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
-		this.slider(containerEl, '3D perspective depth', 'Increase or soften the perspective difference between near and far notes.', 'motion', 'perspectiveStrength', 0.2, 2.4, 0.1);
-		this.toggle(containerEl, 'Reduce motion', 'Use a calmer camera with less ambient movement.', 'motion', 'reduceMotion');
-		this.toggle(containerEl, 'Node glow', 'Show a soft glow around notes.', 'motion', 'glowEnabled');
+		this.slider(this.currentSection, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
+		this.slider(this.currentSection, 'Color animation speed', 'Set how fast animated color schemes cycle.', 'motion', 'colorSpeed', 0.05, 2, 0.05);
+		this.slider(this.currentSection, 'Camera speed', 'Set how quickly the 3D view turns.', 'motion', 'cameraSpeed', 0.1, 1, 0.05);
+		this.slider(this.currentSection, 'Cluster visit interval (seconds)', 'How long the camera stays with each folder cluster.', 'motion', 'clusterPauseSeconds', 2, 30, 1);
+		this.slider(this.currentSection, 'Moving note distance', 'Set how far individual notes drift.', 'motion', 'nodeDriftStrength', 0.01, 0.5, 0.01);
+		this.slider(this.currentSection, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
+		this.dropdown(this.currentSection, 'Link animation', 'Choose how motion travels along connections.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' });
+		this.dropdown(this.currentSection, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
+		this.slider(this.currentSection, '3D perspective depth', 'Increase or soften the perspective difference between near and far notes.', 'motion', 'perspectiveStrength', 0.2, 2.4, 0.1);
+		this.toggle(this.currentSection, 'Reduce motion', 'Use a calmer camera with less ambient movement.', 'motion', 'reduceMotion');
+		this.toggle(this.currentSection, 'Node glow', 'Show a soft glow around notes.', 'motion', 'glowEnabled');
+
 		this.section(containerEl, 'Discovery');
-		this.dropdown(containerEl, 'Mode', 'Focus on a particular way of exploring notes.', null, 'mode', {
+		this.dropdown(this.currentSection, 'Mode', 'Focus on a particular way of exploring notes.', null, 'mode', {
 			wander: 'Wander', 'path-journey': 'Path journey', 'recent-activity': 'Recent activity', 'forgotten-knowledge': 'Forgotten knowledge',
 			'hub-explorer': 'Hub explorer', 'hidden-gems': 'Hidden gems', 'orphan-hunt': 'Orphan hunt',
 		}, null, true);
-		this.slider(containerEl, 'Recent window (days)', 'Used by Recent activity mode and the recent date filter.', 'discovery', 'recentDays', 1, 365, 1, true);
-		this.slider(containerEl, 'Forgotten after (days)', 'Used by Forgotten knowledge mode and the forgotten date filter.', 'discovery', 'forgottenDays', 30, 1500, 10, true);
-		this.section(containerEl, 'Journey');
-		this.slider(containerEl, 'Pause on each note (seconds)', 'Set the interval used by automatic note travel.', 'journey', 'nodePauseSeconds', 1, 30, 1);
-		this.section(containerEl, 'Display');
-		this.toggle(containerEl, 'App header', 'Show or hide the title and status bar at the top of the graph.', 'display', 'showHeader');
-		this.toggle(containerEl, 'Graph title', 'Show or hide the 3D Note Space label.', 'display', 'showGraphLabel');
-		this.toggle(containerEl, 'Node and link totals', 'Show or hide the live node and link counts in the graph.', 'display', 'showGraphStats');
-		this.toggle(containerEl, 'Quick Menu', 'Show or hide the Quick Menu. Use Show Quick Menu to restore it when hidden.', 'display', 'showQuickMenu');
-		this.toggle(containerEl, 'Bottom dashboard', 'Show or hide the complete statistics and recent changes area.', 'display', 'showFooter');
-		this.toggle(containerEl, 'Vault note counter', 'Show or hide the Vault Notes counter in the bottom dashboard.', 'display', 'showVaultNotesCounter');
-		this.toggle(containerEl, 'Linked notes counter', 'Show or hide the Linked Notes counter in the bottom dashboard.', 'display', 'showLinkedNotesCounter');
-		this.toggle(containerEl, 'Folder counter', 'Show or hide the Folders counter in the bottom dashboard.', 'display', 'showFolderCounter');
-		this.toggle(containerEl, 'Activity counter', 'Show or hide the Recent Activity counter in the bottom dashboard.', 'display', 'showActivityCounter');
-		this.toggle(containerEl, 'Recent changes list', 'Show or hide the recent vault changes list in the bottom dashboard.', 'display', 'showRecentChanges');
-		this.toggle(containerEl, 'Note labels', 'Show names for connected notes and the focused note.', 'display', 'showLabels');
-		this.toggle(containerEl, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
-		this.toggle(containerEl, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
-		this.toggle(containerEl, 'Depth layers', 'Draw subtle guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
-		this.toggle(containerEl, 'Cluster halos', 'Draw a soft boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
-		this.toggle(containerEl, 'FPS indicator', 'Show the current rendering rate in the header.', 'display', 'showFps');
-		this.slider(containerEl, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
-		this.slider(containerEl, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
-		this.slider(containerEl, 'Link thickness', 'Scale the lines between notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
+		this.slider(this.currentSection, 'Recent window (days)', 'Used by Recent activity mode and the recent date filter.', 'discovery', 'recentDays', 1, 365, 1, true);
+		this.slider(this.currentSection, 'Forgotten after (days)', 'Used by Forgotten knowledge mode and the forgotten date filter.', 'discovery', 'forgottenDays', 30, 1500, 10, true);
+		this.slider(this.currentSection, 'Pause on each note (seconds)', 'Set the interval used by automatic note travel.', 'journey', 'nodePauseSeconds', 1, 30, 1);
+
+		this.section(containerEl, 'Interface');
+		this.toggle(this.currentSection, 'App header', 'Show the title and status bar.', 'display', 'showHeader');
+		this.toggle(this.currentSection, 'Graph title', 'Show the 3D Note Space label.', 'display', 'showGraphLabel');
+		this.toggle(this.currentSection, 'Node and link totals', 'Show live node and link counts.', 'display', 'showGraphStats');
+		this.toggle(this.currentSection, 'Quick Menu', 'Show the Quick Menu and its controls.', 'display', 'showQuickMenu');
+		this.toggle(this.currentSection, 'Bottom dashboard', 'Show statistics and recent changes.', 'display', 'showFooter');
+		this.toggle(this.currentSection, 'Vault note counter', 'Show the Vault Notes counter.', 'display', 'showVaultNotesCounter');
+		this.toggle(this.currentSection, 'Linked notes counter', 'Show the Linked Notes counter.', 'display', 'showLinkedNotesCounter');
+		this.toggle(this.currentSection, 'Folder counter', 'Show the Folders counter.', 'display', 'showFolderCounter');
+		this.toggle(this.currentSection, 'Activity counter', 'Show the Recent Activity counter.', 'display', 'showActivityCounter');
+		this.toggle(this.currentSection, 'Recent changes list', 'Show recent vault changes.', 'display', 'showRecentChanges');
+		this.toggle(this.currentSection, 'FPS indicator', 'Show the current rendering rate.', 'display', 'showFps');
+
 		this.section(containerEl, 'Hidden items');
-		containerEl.createEl('p', { text: 'Right-click a note or cluster in the graph to hide it. Restore hidden items individually here.' });
-		this.visibilityManager = containerEl.createDiv({ cls: 'swarm-hidden-items-manager' });
+		this.currentSection.createEl('p', { text: 'Restore notes and clusters hidden from the graph.' });
+		this.visibilityManager = this.currentSection.createDiv({ cls: 'swarm-hidden-items-manager' });
 		this.refreshVisibilityManager();
 	}
 
@@ -1620,7 +1625,13 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 			}));
 	}
 
-	section(container, name) { new Setting(container).setName(name).setHeading(); }
+	section(container, name, expandedByDefault = false) {
+		const sectionEl = container.createEl('details', { cls: 'swarm-settings-section' });
+		sectionEl.open = expandedByDefault;
+		sectionEl.createEl('summary', { cls: 'swarm-settings-section-title', text: name });
+		this.currentSection = sectionEl.createDiv({ cls: 'swarm-settings-section-content' });
+		return this.currentSection;
+	}
 
 	dropdown(container, name, desc, section, key, options, callback = null, refreshGraph = false) {
 		new Setting(container).setName(name).setDesc(desc).addDropdown((dropdown) => {
