@@ -24,6 +24,7 @@ const COLOR_PROFILE_CONFIG = {
 	'aqua-mint': { hue: 164, step: 13, saturation: 0.72, lightness: 0.59 },
 	'archive-dust': { hue: 32, step: 18, saturation: 0.37, lightness: 0.66 },
 	arctic: { hue: 198, step: 11, saturation: 0.48, lightness: 0.76 },
+	aurora: { hue: 174, step: 0, saturation: 0.78, lightness: 0.62 },
 	blueprint: { hue: 212, step: 9, saturation: 0.83, lightness: 0.67 },
 	candy: { hue: 326, step: 17, saturation: 0.78, lightness: 0.72 },
 	'city-nights': { hue: 270, step: 24, saturation: 0.68, lightness: 0.61 },
@@ -1489,7 +1490,7 @@ class SwarmGraphView extends ItemView {
 		const paletteColor = (colors, index) => colors[Math.abs(index) % colors.length];
 		const profile = COLOR_PROFILE_CONFIG[scheme];
 		if (profile) {
-			const profileIndex = profile.byDegree ? Math.round(degreeRatio * 5) : profile.byCluster ? node.clusterId : node.index;
+			const profileIndex = profile.byDegree ? Math.round(degreeRatio * 5) : (profile.byCluster || profile.hues) ? node.clusterId : 0;
 			const profileHue = profile.hues
 				? profile.hues[Math.abs(profileIndex) % profile.hues.length] + Math.floor(Math.abs(profileIndex) / profile.hues.length) * profile.step
 				: profile.hue + profileIndex * profile.step;
@@ -1786,7 +1787,7 @@ class SwarmGraphView extends ItemView {
 			const cx = nodes.reduce((sum, node) => sum + node.screenX, 0) / nodes.length;
 			const cy = nodes.reduce((sum, node) => sum + node.screenY, 0) / nodes.length;
 			const radius = Math.min(190, Math.max(22, ...nodes.map((node) => Math.hypot(node.screenX - cx, node.screenY - cy) + 14)));
-			const color = palette[nodes[0].clusterId % palette.length];
+			const color = nodes[0].color || palette[nodes[0].clusterId % palette.length];
 			if (visual === 'star-system') {
 				const orbitRadius = Math.max(36, radius * .82);
 				ctx.save(); ctx.strokeStyle = `rgba(${color}, .27)`; ctx.lineWidth = 1.2;
@@ -2199,7 +2200,12 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		const cameraSection = this.section(containerEl, 'Camera', true);
 		if (view) this.renderCameraControls(cameraSection, view, false);
 
-		this.section(containerEl, 'Appearance', true);
+		this.section(containerEl, 'Performance', true);
+		this.dropdown(this.currentSection, 'Rendering quality', 'Auto lowers graph detail as vault size or drawing time increases. Balanced and Performance reduce the number of visible notes and animated links for smoother rendering.', 'motion', 'qualityMode', { auto: 'Auto', balanced: 'Balanced', performance: 'Performance' });
+		this.toggle(this.currentSection, 'Show FPS', 'Show the current rendering rate in the header.', 'display', 'showFps');
+		this.toggle(this.currentSection, 'Performance metrics', 'Show graph build time, draw time, and active rendering quality in the header.', 'display', 'showPerformanceMetrics');
+
+		this.section(containerEl, 'Appearance');
 		this.dropdown(this.currentSection, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
 			constellation: 'Constellation', starSystem: 'Star System', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
 		}, (value) => this.plugin.applyPreset(value));
@@ -2210,7 +2216,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 			'deep-space': 'Deep Space', neon: 'Neon', minimal: 'Minimal', 'soft-glow': 'Soft Glow', 'neural-bloom': 'Neural Bloom',
 			'satellite-view': 'Satellite View', 'glass-minimal': 'Glass Minimal', 'academic-light': 'Academic Light', 'ink-map': 'Ink Map',
 		}, null, true);
-		this.dropdown(this.currentSection, 'Color scheme', 'Choose a color behavior independently of the visual style.', null, 'colors', COLOR_SCHEME_OPTIONS);
+		this.dropdown(this.currentSection, 'Color scheme', 'Choose a color behavior independently of the visual style. Single-hue profiles keep notes in one color family; gradient and cluster profiles intentionally vary.', null, 'colors', COLOR_SCHEME_OPTIONS);
 		this.text(this.currentSection, 'Custom palette colors', 'Enter comma-separated HEX colors.', null, 'customPalette');
 		this.dropdown(this.currentSection, 'Background style', 'Choose a scene background. Horizon, depth bands, and depth guides make distance easier to judge.', 'motion', 'backgroundStyle', {
 			nebula: 'Nebula', aurora: 'Aurora', grid: 'Deep Space Grid', void: 'Deep Void', starfield: 'Starfield',
@@ -2222,13 +2228,13 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(this.currentSection, 'Node labels', 'Show note names. All labels appear in smaller graphs; large graphs sample labels automatically. Hover a note to reveal its name.', 'display', 'showLabels');
 		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
 		this.toggle(this.currentSection, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
-		this.toggle(this.currentSection, 'Depth layers', 'Show labeled FAR, MID, and NEAR guide planes with perspective rings.', 'display', 'showDepthLayers');
+		this.toggle(this.currentSection, 'FAR / MID / NEAR depth rings', 'Show or hide the labeled FAR, MID, and NEAR perspective rings.', 'display', 'showDepthLayers');
 		this.toggle(this.currentSection, 'Cluster halos', 'Draw a boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
 		this.slider(this.currentSection, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(this.currentSection, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
 		this.slider(this.currentSection, 'Link thickness', 'Scale the lines between linked notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
 
-		this.section(containerEl, 'Graph', true);
+		this.section(containerEl, 'Graph');
 		this.slider(this.currentSection, 'Node distance', 'Set how far apart notes appear in the 3D layouts from 0.1× to 6×.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
 		this.slider(this.currentSection, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6×. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
 		this.dropdown(this.currentSection, 'Cluster arrangement', 'Arrange folder groups as spaced islands, a grid, or a spiral. Links between notes remain visible across groups.', 'graph', 'clusterLayout', { islands: 'Cluster islands', grid: 'Cluster grid', spiral: 'Cluster spiral' }, null, true);
@@ -2241,17 +2247,19 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(this.currentSection, 'Include floating notes', 'Show notes with no links. Enabling this scans Markdown note paths in the vault.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(this.currentSection, 'Cluster notes by', 'Group notes by top-level folder, full folder path, or their first tag.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path', tag: 'First tag' }, null, true);
 
-		this.section(containerEl, 'Motion');
-		this.dropdown(this.currentSection, 'Rendering quality', 'Auto adapts detail to graph size and drawing time. Balanced and Performance use progressively fewer visual details.', 'motion', 'qualityMode', { auto: 'Auto', balanced: 'Balanced', performance: 'Performance' });
+		this.section(containerEl, 'Motion', true);
+		this.currentSection.createEl('h4', { text: 'Playback and independent effects' });
 		this.toggle(this.currentSection, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
 		this.toggle(this.currentSection, 'Moving notes', 'Enable Swarm, Chaos, Blob Order, Moving Notes, and Notes Orbit Clusters motion.', 'motion', 'noteMotionEnabled');
 		this.toggle(this.currentSection, 'Animated links', 'Enable flowing particles, pulses, drawing lines, and moving dashes on note links.', 'motion', 'linkAnimationEnabled');
 		this.toggle(this.currentSection, 'Animated route', 'Enable motion effects on the selected note path.', 'motion', 'routeAnimationEnabled');
 		this.toggle(this.currentSection, 'Animated colors', 'Allow animated color profiles to cycle through their colors.', 'motion', 'colorAnimationEnabled');
-		this.dropdown(this.currentSection, '3D animation style', 'Spaceflight moves the camera through linked notes with rushing star streaks. Other styles orbit the camera, clusters, or individual notes.', 'motion', 'animationStyle', {
+		this.currentSection.createEl('h4', { text: 'Camera and note movement style' });
+		this.dropdown(this.currentSection, 'Camera / note animation style', 'Choose Static Camera, Spaceflight, Camera Orbit, Cluster Tour, Notes Orbit Clusters, Moving Notes, Swarm, Chaos, or Blob Order. The moving-note choices are configured here.', 'motion', 'animationStyle', {
 			static: 'Static camera', orbit: '3D camera orbit', spaceflight: 'Spaceflight (fly through notes)', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
 			swarm: 'Swarm', chaos: 'Chaos', 'blob-order': 'Blob Order',
 		}, (value) => this.plugin.setAnimationStyle(value));
+		this.currentSection.createEl('h4', { text: 'Animation speed and line effects' });
 		this.slider(this.currentSection, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
 		this.slider(this.currentSection, 'Color animation speed', 'Set how fast animated color schemes cycle.', 'motion', 'colorSpeed', 0.05, 2, 0.05);
 		this.slider(this.currentSection, 'Camera speed', 'Set how quickly the 3D view turns.', 'motion', 'cameraSpeed', 0.1, 1, 0.05);
@@ -2300,9 +2308,6 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(this.currentSection, 'Folder counter', 'Show the Folders counter.', 'display', 'showFolderCounter');
 		this.toggle(this.currentSection, 'Activity counter', 'Show the Recent Activity counter.', 'display', 'showActivityCounter');
 		this.toggle(this.currentSection, 'Recent changes list', 'Show recent vault changes.', 'display', 'showRecentChanges');
-		this.toggle(this.currentSection, 'FPS indicator', 'Show the current rendering rate.', 'display', 'showFps');
-		this.toggle(this.currentSection, 'Performance metrics', 'Show graph build time, drawing time, and active rendering quality in the header.', 'display', 'showPerformanceMetrics');
-
 		this.section(containerEl, 'Hidden items');
 		this.currentSection.createEl('p', { text: 'Restore notes and clusters hidden from the graph.' });
 		this.visibilityManager = this.currentSection.createDiv({ cls: 'swarm-hidden-items-manager' });
