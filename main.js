@@ -1131,6 +1131,24 @@ class SwarmGraphView extends ItemView {
 			const fade = (hoveredNode && !isNeighbor ? 0.22 : 1) * focusFade * (routeNodes.size && !isRouteNode ? 0.32 : 1);
 			ctx.fillStyle = `rgba(${hue}, ${Math.max(0.18, Math.min(0.95, 0.58 + node.depth * 0.28)) * fade})`;
 			ctx.fill();
+			if (['glass-minimal', 'academic-light', 'research-board', 'neon', 'deep-space', 'constellation', 'mind-palace', 'archive-fog', 'soft-glow'].includes(visual)) {
+				ctx.beginPath();
+				this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * pulse * (visual === 'mind-palace' ? 0.58 : 0.78), visual);
+				ctx.lineWidth = visual === 'neon' ? 1.4 : visual === 'glass-minimal' ? 1.1 : visual === 'soft-glow' ? 0.9 : 0.8;
+				ctx.strokeStyle = visual === 'neon' ? `rgba(${hue}, .95)` : visual === 'deep-space' ? 'rgba(211,198,255,.8)' : visual === 'constellation' ? 'rgba(198,239,255,.85)' : visual === 'mind-palace' ? 'rgba(255,208,145,.75)' : visual === 'archive-fog' ? 'rgba(223,197,159,.55)' : visual === 'soft-glow' ? `rgba(${hue}, .64)` : 'rgba(34,48,58,.7)';
+				if (['neon', 'soft-glow'].includes(visual) && !simplifiedRendering && motion.glowEnabled) { ctx.shadowColor = `rgba(${hue}, .95)`; ctx.shadowBlur = visual === 'neon' ? 8 : 4; }
+				ctx.stroke(); ctx.shadowBlur = 0;
+				if (visual === 'archive-fog' && nodeRadius > 2) {
+					ctx.beginPath(); ctx.arc(node.screenX, node.screenY, nodeRadius * 1.65, 0, Math.PI * 2);
+					ctx.strokeStyle = 'rgba(223,197,159,.16)'; ctx.lineWidth = 1; ctx.stroke();
+				}
+				if (visual === 'constellation' && nodeRadius > 2.5) {
+					const ray = nodeRadius * 1.7; ctx.beginPath();
+					ctx.moveTo(node.screenX - ray, node.screenY); ctx.lineTo(node.screenX + ray, node.screenY);
+					ctx.moveTo(node.screenX, node.screenY - ray); ctx.lineTo(node.screenX, node.screenY + ray);
+					ctx.strokeStyle = 'rgba(198,239,255,.48)'; ctx.lineWidth = 0.7; ctx.stroke();
+				}
+			}
 			ctx.restore();
 			if (display.showNodeIcons && nodeRadius > 3) {
 				ctx.fillStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual) || motion.backgroundStyle === 'white' ? '#17222b' : '#071015';
@@ -1243,13 +1261,44 @@ class SwarmGraphView extends ItemView {
 	}
 
 	traceNodeShape(ctx, x, y, size, style) {
-		if (style === 'circuit-minimal' || style === 'matrix-hacker') {
+		if (['circuit-minimal', 'matrix-hacker', 'research-board'].includes(style)) {
 			ctx.rect(x - size * 0.72, y - size * 0.72, size * 1.44, size * 1.44);
 			return;
 		}
-		if (style === 'signal-radar') {
+		if (['signal-radar', 'satellite-view', 'neon'].includes(style)) {
 			ctx.moveTo(x, y - size); ctx.lineTo(x + size, y); ctx.lineTo(x, y + size); ctx.lineTo(x - size, y); ctx.closePath();
 			return;
+		}
+		if (style === 'mind-palace') {
+			if (typeof ctx.roundRect === 'function') ctx.roundRect(x - size, y - size * 0.76, size * 2, size * 1.52, Math.max(1, size * 0.22));
+			else ctx.rect(x - size, y - size * 0.76, size * 2, size * 1.52);
+			return;
+		}
+		if (style === 'aqua-mint') {
+			for (let point = 0; point < 6; point++) {
+				const angle = point * Math.PI / 3;
+				const px = x + Math.cos(angle) * size; const py = y + Math.sin(angle) * size;
+				if (!point) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+			}
+			ctx.closePath(); return;
+		}
+		if (style === 'neural-bloom') {
+			for (let point = 0; point < 16; point++) {
+				const angle = -Math.PI / 2 + point * Math.PI / 8;
+				const radius = point % 2 ? size * 0.64 : size;
+				const px = x + Math.cos(angle) * radius; const py = y + Math.sin(angle) * radius;
+				if (!point) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+			}
+			ctx.closePath(); return;
+		}
+		if (style === 'ink-map') {
+			for (let point = 0; point < 10; point++) {
+				const angle = point * Math.PI / 5;
+				const radius = size * (0.82 + ((point * 7) % 4) * 0.06);
+				const px = x + Math.cos(angle) * radius; const py = y + Math.sin(angle) * radius;
+				if (!point) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+			}
+			ctx.closePath(); return;
 		}
 		if (style === 'star-map' || style === 'star-system') {
 			for (let point = 0; point < 10; point++) {
@@ -1267,12 +1316,13 @@ class SwarmGraphView extends ItemView {
 		const style = motion.backgroundStyle;
 		const visual = this.plugin.settings.visual;
 		const visualBackgrounds = {
+			'constellation': '#07121c', 'deep-space': '#050817', 'neon': '#100719', 'minimal': '#090d12',
 			'timeline-map': '#101722', 'circuit-minimal': '#071115', 'archive-fog': '#111318',
 			'research-board': '#e8e5dc', 'matrix-hacker': '#020b07', 'star-map': '#050a18', 'star-system': '#030611',
 			'aqua-mint': '#061512', 'signal-radar': '#07121d', 'mind-palace': '#100a1d',
 			'focus-lens': '#080d17', 'thread-weaver': '#0c0b18', 'ink-map': '#e9e4d6',
 			'neural-bloom': '#100817', 'satellite-view': '#071017', 'glass-minimal': '#10171c',
-			'academic-light': '#f0efe8', 'soft-glow': '#090d17',
+			'academic-light': '#f0efe8', 'soft-glow': '#090d17', 'focus-lens': '#050a13',
 		};
 		const base = style === 'black' ? '#000000' : style === 'white' ? '#ffffff' : visualBackgrounds[visual] || (style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12');
 		ctx.fillStyle = base; ctx.fillRect(0, 0, width, height);
@@ -1284,11 +1334,22 @@ class SwarmGraphView extends ItemView {
 			nebula.addColorStop(0, 'rgba(76, 58, 142, .30)'); nebula.addColorStop(.42, 'rgba(37, 60, 122, .19)'); nebula.addColorStop(1, 'rgba(3, 6, 17, 0)');
 			ctx.fillStyle = nebula; ctx.fillRect(0, 0, width, height);
 		}
-		if (!paperStyle && !flatStyle && (style === 'nebula' || style === 'aurora' || visual === 'deep-space' || visual === 'neural-bloom' || visual === 'mind-palace' || visual === 'archive-fog' || visual === 'soft-glow' || visual === 'thread-weaver')) {
+		if (!paperStyle && !flatStyle && (style === 'nebula' || style === 'aurora' || ['constellation', 'deep-space', 'neural-bloom', 'mind-palace', 'archive-fog', 'soft-glow', 'thread-weaver', 'neon', 'aqua-mint'].includes(visual))) {
 			const glow = ctx.createRadialGradient(width * 0.52, height * 0.48, 0, width * 0.52, height * 0.48, Math.max(width, height) * 0.72);
-			const cool = style === 'aurora' || visual === 'aqua-mint';
-			glow.addColorStop(0, visual === 'neural-bloom' ? 'rgba(214,68,255,.30)' : cool ? 'rgba(26,105,111,.32)' : 'rgba(53,42,112,.34)');
-			glow.addColorStop(0.55, visual === 'archive-fog' ? 'rgba(155,143,119,.16)' : cool ? 'rgba(28,57,93,.18)' : 'rgba(18,50,69,.16)');
+			const atmosphere = {
+				constellation: ['rgba(22,118,163,.31)', 'rgba(24,57,91,.18)'],
+				'deep-space': ['rgba(83,49,171,.34)', 'rgba(38,35,94,.18)'],
+				'neural-bloom': ['rgba(214,68,255,.30)', 'rgba(111,39,140,.18)'],
+				'mind-palace': ['rgba(142,77,177,.28)', 'rgba(70,43,102,.16)'],
+				'archive-fog': ['rgba(177,145,97,.24)', 'rgba(100,91,73,.16)'],
+				'soft-glow': ['rgba(76,129,173,.25)', 'rgba(40,76,104,.16)'],
+				'thread-weaver': ['rgba(138,78,181,.27)', 'rgba(69,54,110,.17)'],
+				neon: ['rgba(201,34,170,.27)', 'rgba(91,28,106,.17)'],
+				'aqua-mint': ['rgba(26,145,121,.30)', 'rgba(28,77,93,.18)'],
+			};
+			const colors = atmosphere[visual] || (style === 'aurora' ? ['rgba(26,105,111,.32)', 'rgba(28,57,93,.18)'] : ['rgba(53,42,112,.34)', 'rgba(18,50,69,.16)']);
+			glow.addColorStop(0, colors[0]);
+			glow.addColorStop(0.55, colors[1]);
 			glow.addColorStop(1, 'rgba(4,7,13,0)'); ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
 		}
 		if (style === 'grid' || ['timeline-map', 'circuit-minimal', 'research-board', 'matrix-hacker', 'academic-light', 'ink-map'].includes(visual)) {
@@ -1746,7 +1807,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.dropdown(this.currentSection, 'Visual preset', 'Load a ready-made visual combination.', 'template', 'activeTemplateId', {
 			constellation: 'Constellation', starSystem: 'Star System', deepSpace: 'Deep Space', neon: 'Neon', minimal: 'Minimal Focus',
 		}, (value) => this.plugin.applyPreset(value));
-		this.dropdown(this.currentSection, 'Visual style', 'Choose a complete visual treatment for the graph.', null, 'visual', {
+		this.dropdown(this.currentSection, 'Visual style', 'Choose a graph layout and shape treatment. Color schemes remain independent.', null, 'visual', {
 			constellation: 'Constellation', 'timeline-map': 'Timeline Map', 'mind-palace': 'Mind Palace', 'circuit-minimal': 'Circuit Minimal',
 			'archive-fog': 'Archive Fog', 'focus-lens': 'Focus Lens', 'thread-weaver': 'Thread Weaver', 'research-board': 'Research Board',
 			'signal-radar': 'Signal Radar', 'matrix-hacker': 'Matrix Hacker', 'star-map': 'Star Map', 'star-system': 'Star System', 'aqua-mint': 'Aqua Mint',
