@@ -953,11 +953,17 @@ class SwarmGraphView extends ItemView {
 			const pulse = simplifiedRendering ? 1 : 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
 			const hue = this.getNodeColor(node);
-			if (!simplifiedRendering) {
+			if (!simplifiedRendering && motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
 				ctx.beginPath();
 				this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
-				ctx.fillStyle = `rgba(${hue}, ${motion.glowEnabled && !['minimal', 'circuit-minimal'].includes(visual) ? 0.035 + node.depth * 0.012 : 0})`;
+				const glowAlpha = Math.max(0.11, Math.min(0.26, 0.16 + node.depth * 0.025));
+				ctx.fillStyle = `rgba(${hue}, ${glowAlpha})`;
 				ctx.fill();
+			}
+			ctx.save();
+			if (motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
+				ctx.shadowColor = `rgba(${hue}, .9)`;
+				ctx.shadowBlur = Math.max(7, nodeRadius * 2.2);
 			}
 			ctx.beginPath();
 			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * pulse, visual);
@@ -967,6 +973,7 @@ class SwarmGraphView extends ItemView {
 			const fade = (hoveredNode && !isNeighbor ? 0.22 : 1) * focusFade * (routeNodes.size && !isRouteNode ? 0.32 : 1);
 			ctx.fillStyle = `rgba(${hue}, ${Math.max(0.18, Math.min(0.95, 0.58 + node.depth * 0.28)) * fade})`;
 			ctx.fill();
+			ctx.restore();
 			if (display.showNodeIcons && nodeRadius > 3) {
 				ctx.fillStyle = '#071015';
 				ctx.font = `600 ${Math.max(5, nodeRadius * 1.15)}px sans-serif`;
