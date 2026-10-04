@@ -1,7 +1,7 @@
 {
   "id": "constellation-three-d",
   "name": "Constellation 3D",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "minAppVersion": "1.5.0",
   "description": "Explore your vault in an animated 3D note space with discovery modes, graph filters, journeys, and visual presets.",
   "author": "loopman90",

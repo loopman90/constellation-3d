@@ -60,6 +60,7 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 - Right-click a note and choose **Collapse cluster** to replace its folder's notes with one summary node. Click the summary or choose **Expand cluster** to restore its notes. Choose **Isolate cluster** to focus on one folder, then right-click it and choose **Show all clusters** to return to the full graph.
 - Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
 - Choose **Notes Orbit Clusters** or **Moving Notes** in the Quick Menu to animate note movement; use the **Animation** button to pause or resume it.
+- Click **Note Path** in the Quick Menu, then click a start note and a destination note to highlight the shortest linked route. Click **Clear Path** to remove it. Route highlights remain visible when regular links are hidden.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
 - Click **Control Panel** in the graph toolbar to adjust Camera, Graph, Visual, Background, Motion, Discovery, Journey, and Display settings without opening Obsidian's main settings. Plugin configuration is also available under **Settings → Constellation 3D**.
 

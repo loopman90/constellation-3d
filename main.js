@@ -286,6 +286,15 @@ class SwarmGraphView extends ItemView {
 		this.optimizeButton.addEventListener('click', () => this.optimizeView());
 		this.refreshButton = controls.createEl('button', { cls: 'swarm-control-button', text: '↻  REFRESH' });
 		this.refreshButton.addEventListener('click', () => this.rebuildGraph());
+		this.pathButton = controls.createEl('button', { cls: 'swarm-control-button swarm-icon-button' });
+		setIcon(this.pathButton, 'route');
+		this.pathButton.setAttribute('aria-label', 'Show a path between two notes');
+		this.pathButton.title = 'Note Path: select two notes to show the shortest linked path';
+		this.pathButton.addEventListener('click', () => this.togglePathSelection());
+		this.clearPathButton = controls.createEl('button', { cls: 'swarm-control-button swarm-icon-button is-hidden' });
+		setIcon(this.clearPathButton, 'x');
+		this.clearPathButton.setAttribute('aria-label', 'Clear note path');
+		this.clearPathButton.addEventListener('click', () => this.clearPathPreview());
 		this.controlPanel = main.createDiv({ cls: 'swarm-control-panel is-hidden' });
 		const controlPanelHeader = this.controlPanel.createDiv({ cls: 'swarm-control-panel-header' });
 		controlPanelHeader.createDiv({ cls: 'swarm-control-panel-title', text: 'CONSTELLATION 3D CONTROL PANEL' });
@@ -552,6 +561,7 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		this.nodeByPath = new Map(this.nodes.map((node) => [node.path, node]));
+		this.pathDisplayBySource = pathToDisplayPath;
 		const aggregatedEdges = new Map();
 		for (const edge of visibleEdges) {
 			const source = pathToDisplayPath.get(edge.source);
@@ -568,11 +578,24 @@ class SwarmGraphView extends ItemView {
 			this.adjacency.get(edge.source)?.add(edge.target);
 			this.adjacency.get(edge.target)?.add(edge.source);
 		}
-		this.renderEdges = this.edges.length > 12000
-			? [...this.edges].sort((a, b) => b.count - a.count).slice(0, 12000)
-			: this.edges;
+		if (this.edges.length > 12000) {
+			const routePairs = new Set();
+			const route = interaction.pathPreview || [];
+			for (let index = 1; index < route.length; index++) {
+				const source = pathToDisplayPath.get(route[index - 1]);
+				const target = pathToDisplayPath.get(route[index]);
+				if (source && target && source !== target) {
+					routePairs.add(`${source}|${target}`);
+					routePairs.add(`${target}|${source}`);
+				}
+			}
+			const strongestEdges = [...this.edges].sort((a, b) => b.count - a.count).slice(0, 12000);
+			const requiredRouteEdges = this.edges.filter((edge) => routePairs.has(`${edge.source}|${edge.target}`));
+			this.renderEdges = [...new Map([...strongestEdges, ...requiredRouteEdges].map((edge) => [`${edge.source}|${edge.target}`, edge])).values()];
+		} else this.renderEdges = this.edges;
 		this.nodeCount?.setText(String(this.nodes.length));
 		this.edgeCount?.setText(String(this.edges.length));
+		this.updatePathControls();
 		this.updateMetrics(files);
 		this.renderActivity();
 		this.controlSettings?.refreshVisibilityManager();
@@ -581,6 +604,61 @@ class SwarmGraphView extends ItemView {
 		if (this.animationStyleSelect) this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
 		this.updateControlLabels();
 	this.scheduleDraw();
+	}
+
+	togglePathSelection() {
+		this.pathPickMode = !this.pathPickMode;
+		this.pendingPathStart = null;
+		this.updatePathControls();
+		new Notice(this.pathPickMode ? 'Click the note where the path should start.' : 'Note path selection cancelled.');
+	}
+
+	updatePathControls() {
+		if (!this.pathButton) return;
+		this.pathButton.setAttribute('aria-pressed', String(Boolean(this.pathPickMode)));
+		this.pathButton.title = this.pathPickMode
+			? (this.pendingPathStart ? 'Note Path: click a destination note' : 'Note Path: click a start note')
+			: 'Note Path: select two notes to show the shortest linked path';
+		this.pathButton.toggleClass('is-active', Boolean(this.pathPickMode));
+		const interaction = this.plugin.settings.interaction;
+		this.clearPathButton?.toggleClass('is-hidden', !interaction.pathPreview.length && !interaction.pathStartPath);
+	}
+
+	async selectPathNode(node) {
+		if (node.isClusterSummary) {
+			new Notice('Expand this cluster before selecting a note for the path.');
+			return;
+		}
+		if (!this.pendingPathStart) {
+			this.pendingPathStart = node.path;
+			await this.plugin.setSetting('interaction', 'pathStartPath', node.path, false);
+			this.updatePathControls();
+			new Notice(`Start note: ${node.name}. Now click the destination note.`);
+			return;
+		}
+		if (node.path === this.pendingPathStart) {
+			new Notice('Choose a different destination note.');
+			return;
+		}
+		const path = this.findShortestPath(this.pendingPathStart, node.path);
+		if (!path.length) {
+			new Notice('No linked path found between those notes in the current graph.');
+			return;
+		}
+		await this.plugin.setSetting('interaction', 'pathPreview', path, false);
+		this.pathPickMode = false;
+		this.pendingPathStart = null;
+		this.updatePathControls();
+		new Notice(`Note path shown: ${path.length} notes.`);
+	}
+
+	async clearPathPreview() {
+		this.plugin.settings.interaction.pathStartPath = null;
+		this.plugin.settings.interaction.pathPreview = [];
+		this.pathPickMode = false;
+		this.pendingPathStart = null;
+		await this.plugin.saveSettings();
+		this.updatePathControls();
 	}
 
 	toggleJourney() {
@@ -773,19 +851,34 @@ class SwarmGraphView extends ItemView {
 		});
 		const animationStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 1200)) : 1;
 		const interaction = this.plugin.settings.interaction;
-		const routeEdges = new Set(interaction.pathPreview.slice(1).map((path, index) => `${interaction.pathPreview[index]}|${path}`));
+		const routeEdges = new Set();
+		const routeNodes = new Set();
+		const routeOrder = new Map();
+		let previousRouteNode = null;
+		for (const sourcePath of interaction.pathPreview) {
+			const displayPath = this.pathDisplayBySource?.get(sourcePath);
+			if (!displayPath || !nodeMap.has(displayPath)) { previousRouteNode = null; continue; }
+			routeNodes.add(displayPath);
+			if (!routeOrder.has(displayPath)) routeOrder.set(displayPath, routeOrder.size);
+			if (previousRouteNode && previousRouteNode !== displayPath) {
+				routeEdges.add(`${previousRouteNode}|${displayPath}`);
+				routeEdges.add(`${displayPath}|${previousRouteNode}`);
+			}
+			previousRouteNode = displayPath;
+		}
 		const hoveredNode = this.nodes.find((node) => node.hovered);
 		const hoveredNeighborhood = new Set(hoveredNode ? [hoveredNode.path] : []);
 		if (hoveredNode) for (const path of this.adjacency.get(hoveredNode.path) || []) hoveredNeighborhood.add(path);
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
 		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height);
 		if (simplifiedRendering) ctx.setLineDash([]);
-		for (const [edgeIndex, edge] of (display.showLinks ? sortedEdges : []).entries()) {
+		for (const [edgeIndex, edge] of sortedEdges.entries()) {
 			const animateLine = !simplifiedRendering || edgeIndex % animationStride === 0;
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
 			if (!a || !b) continue;
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
+			if (!display.showLinks && !isRoute) continue;
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(edge.source) && hoveredNeighborhood.has(edge.target);
 			const alpha = isRoute ? 0.94 : Math.max(0.025, Math.min(0.5, (0.1 + (a.depth + b.depth) * 0.06 + Math.min(edge.count, 4) * 0.025) * (hoveredNode && !isNeighbor ? 0.25 : 1)));
 			const pathStyle = motion.pathAnimationStyle;
@@ -830,8 +923,10 @@ class SwarmGraphView extends ItemView {
 				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
 			}
 			if (isRoute && motion.animationEnabled && !motion.reduceMotion && ['comet', 'draw'].includes(pathStyle)) {
-				const routeIndex = interaction.pathPreview.indexOf(edge.source);
-				const forward = routeIndex >= 0 && interaction.pathPreview[routeIndex + 1] === edge.target;
+				const sourceIndex = routeOrder.get(edge.source) ?? -1;
+				const targetIndex = routeOrder.get(edge.target) ?? -1;
+				const routeIndex = Math.min(sourceIndex, targetIndex);
+				const forward = sourceIndex >= 0 && sourceIndex < targetIndex;
 				const start = forward ? a : b; const end = forward ? b : a;
 				const progress = (this.frame * 0.004 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
 				const px = start.screenX + (end.screenX - start.screenX) * progress;
@@ -858,8 +953,9 @@ class SwarmGraphView extends ItemView {
 			ctx.beginPath();
 			this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * pulse, visual);
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(node.path);
+			const isRouteNode = routeNodes.has(node.path);
 			const focusFade = visual === 'focus-lens' && !node.focused && node.path !== activeNodePath && !node.hovered ? 0.34 : 1;
-			const fade = (hoveredNode && !isNeighbor ? 0.22 : 1) * focusFade;
+			const fade = (hoveredNode && !isNeighbor ? 0.22 : 1) * focusFade * (routeNodes.size && !isRouteNode ? 0.32 : 1);
 			ctx.fillStyle = `rgba(${hue}, ${Math.max(0.18, Math.min(0.95, 0.58 + node.depth * 0.28)) * fade})`;
 			ctx.fill();
 			if (display.showNodeIcons && nodeRadius > 3) {
@@ -869,14 +965,16 @@ class SwarmGraphView extends ItemView {
 				ctx.fillText(node.name.slice(0, 1).toUpperCase(), node.screenX, node.screenY + 0.3);
 				ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
 			}
-			if (node.pinned || node.focused) {
+			if (node.pinned || node.focused || isRouteNode) {
 				ctx.beginPath();
-				ctx.arc(node.screenX, node.screenY, nodeRadius + (node.focused ? 6 : 4), 0, Math.PI * 2);
-				ctx.strokeStyle = node.focused ? 'rgba(255, 205, 112, 1)' : 'rgba(255, 205, 112, 0.72)';
-				ctx.lineWidth = node.focused ? 1.8 : 1.2;
+				ctx.arc(node.screenX, node.screenY, nodeRadius + (isRouteNode ? 7 : node.focused ? 6 : 4), 0, Math.PI * 2);
+				ctx.strokeStyle = isRouteNode ? 'rgba(255, 195, 105, 1)' : node.focused ? 'rgba(255, 205, 112, 1)' : 'rgba(255, 205, 112, 0.72)';
+				ctx.lineWidth = isRouteNode ? 2.4 : node.focused ? 1.8 : 1.2;
+				if (isRouteNode) { ctx.shadowColor = 'rgba(255, 191, 91, .85)'; ctx.shadowBlur = 10; }
 				ctx.stroke();
+				ctx.shadowBlur = 0;
 			}
-			if (display.showLabels && (node.hovered || node.focused || (!simplifiedRendering && node.degree > 2))) {
+			if (display.showLabels && (node.hovered || node.focused || isRouteNode || (!simplifiedRendering && node.degree > 2))) {
 				ctx.font = `${display.labelSize}px var(--font-monospace)`;
 				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual);
 				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? `rgba(35,48,55,${Math.max(0.52, 0.66 + node.depth * 0.2)})` : visual === 'matrix-hacker' ? 'rgba(156,255,178,.86)' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
@@ -1076,6 +1174,7 @@ class SwarmGraphView extends ItemView {
 	applySettings() {
 		this.updateControlLabels();
 		this.updateDisplayVisibility();
+		this.updatePathControls();
 		if (this.scopeSelect) this.scopeSelect.value = this.plugin.settings.graph.scope;
 		if (this.modeSelect) this.modeSelect.value = this.plugin.settings.mode;
 		if (this.colorSelect) this.colorSelect.value = this.plugin.settings.colors;
@@ -1161,6 +1260,7 @@ class SwarmGraphView extends ItemView {
 				this.plugin.settings.interaction.pathStartPath = null;
 				this.plugin.settings.interaction.pathPreview = [];
 				await this.plugin.saveSettings();
+				this.updatePathControls();
 			}));
 		}
 		menu.showAtMouseEvent(event);
@@ -1223,6 +1323,7 @@ class SwarmGraphView extends ItemView {
 		if (this.dragMoved) { this.dragMoved = false; return; }
 		const node = this.findNode(event);
 		if (!node) return;
+		if (this.pathPickMode) { void this.selectPathNode(node); return; }
 		if (node.isClusterSummary) {
 			const collapsed = this.plugin.settings.interaction.collapsedClusterNames || [];
 			this.plugin.setSetting('interaction', 'collapsedClusterNames', collapsed.filter((name) => name !== node.clusterName), true);
