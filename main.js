@@ -27,7 +27,7 @@ const COLOR_PROFILE_CONFIG = {
 	blueprint: { hue: 212, step: 9, saturation: 0.83, lightness: 0.67 },
 	candy: { hue: 326, step: 17, saturation: 0.78, lightness: 0.72 },
 	'city-nights': { hue: 270, step: 24, saturation: 0.68, lightness: 0.61 },
-	'cluster-neon': { hue: 176, step: 39, saturation: 0.98, lightness: 0.64 },
+	'cluster-neon': { hue: 176, step: 39, saturation: 0.98, lightness: 0.64, byCluster: true },
 	'constellation-white': { hue: 204, step: 8, saturation: 0.3, lightness: 0.86 },
 	'copper-blue': { hues: [205, 27], step: 8, saturation: 0.78, lightness: 0.64 },
 	crystal: { hue: 189, step: 23, saturation: 0.58, lightness: 0.79 },
@@ -62,7 +62,7 @@ const COLOR_PROFILE_CONFIG = {
 	'sepia-archive': { hue: 29, step: 12, saturation: 0.56, lightness: 0.61 },
 	'signal-strength': { hue: 122, step: 0, saturation: 0.82, lightness: 0.52, byDegree: true },
 	'soft-lavender': { hue: 267, step: 15, saturation: 0.48, lightness: 0.76 },
-	'solar-system': { hue: 35, step: 37, saturation: 0.86, lightness: 0.62 },
+	'solar-system': { hue: 35, step: 37, saturation: 0.86, lightness: 0.62, byCluster: true },
 	solarized: { hue: 193, step: 22, saturation: 0.55, lightness: 0.62 },
 	'star-map': { hue: 220, step: 27, saturation: 0.32, lightness: 0.82 },
 	vaporwave: { hue: 296, step: 31, saturation: 0.89, lightness: 0.66 },
@@ -717,6 +717,7 @@ class SwarmGraphView extends ItemView {
 			const strongestEdges = [...this.edges].sort((a, b) => b.count - a.count).filter((edge) => !routeKeys.has(`${edge.source}|${edge.target}`));
 			this.renderEdges = [...routeEdges, ...strongestEdges].slice(0, 12000);
 		} else this.renderEdges = this.edges;
+		this.renderClusterLinkCount = this.renderEdges.reduce((total, edge) => total + (this.nodeByPath.get(edge.source)?.clusterId !== this.nodeByPath.get(edge.target)?.clusterId ? 1 : 0), 0);
 		this.nodeCount?.setText(String(this.nodes.length));
 		this.edgeCount?.setText(String(this.edges.length));
 		this.updatePathControls();
@@ -1001,6 +1002,7 @@ class SwarmGraphView extends ItemView {
 		});
 		const edgeStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 2400)) : 1;
 		const animationStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 900)) : 1;
+		const crossClusterStride = simplifiedRendering ? Math.max(1, Math.ceil((this.renderClusterLinkCount || 0) / 600)) : 1;
 		const interaction = this.plugin.settings.interaction;
 		const routeEdges = new Set();
 		const routeNodes = new Set();
@@ -1023,16 +1025,18 @@ class SwarmGraphView extends ItemView {
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
 		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height, visual);
 		if (simplifiedRendering) ctx.setLineDash([]);
+		let crossClusterIndex = 0;
 		for (let edgeIndex = 0; edgeIndex < sortedEdges.length; edgeIndex++) {
 			const edge = sortedEdges[edgeIndex];
-			const animateLine = !simplifiedRendering || edgeIndex % animationStride === 0;
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
 			if (!a || !b) continue;
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
-			if (edgeIndex % edgeStride !== 0 && !isRoute) continue;
-			if (!display.showLinks && !isRoute) continue;
 			const isClusterLink = a.clusterId !== b.clusterId;
+			const keepClusterLink = isClusterLink && crossClusterIndex++ % crossClusterStride === 0;
+			const animateLine = !simplifiedRendering || keepClusterLink || edgeIndex % animationStride === 0;
+			if (edgeIndex % edgeStride !== 0 && !isRoute && !keepClusterLink) continue;
+			if (!display.showLinks && !isRoute) continue;
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(edge.source) && hoveredNeighborhood.has(edge.target);
 			const alpha = isRoute ? 0.94 : Math.max(isClusterLink ? 0.16 : 0.025, Math.min(isClusterLink ? 0.72 : 0.5, (0.1 + (a.depth + b.depth) * 0.06 + Math.min(edge.count, 4) * 0.025 + (isClusterLink ? 0.24 : 0)) * (hoveredNode && !isNeighbor ? 0.25 : 1)));
 			const pathStyle = motion.pathAnimationStyle;
@@ -1072,7 +1076,7 @@ class SwarmGraphView extends ItemView {
 				ctx.shadowBlur = 0;
 			}
 			if (animateLine && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
-				const progress = (this.frame * 0.002 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
+				const progress = (this.frame * 0.009 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
 				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
@@ -1187,7 +1191,7 @@ class SwarmGraphView extends ItemView {
 		const paletteColor = (colors, index) => colors[Math.abs(index) % colors.length];
 		const profile = COLOR_PROFILE_CONFIG[scheme];
 		if (profile) {
-			const profileIndex = profile.byDegree ? Math.round(degreeRatio * 5) : node.clusterId;
+			const profileIndex = profile.byDegree ? Math.round(degreeRatio * 5) : profile.byCluster ? node.clusterId : node.index;
 			const profileHue = profile.hues
 				? profile.hues[Math.abs(profileIndex) % profile.hues.length] + Math.floor(Math.abs(profileIndex) / profile.hues.length) * profile.step
 				: profile.hue + profileIndex * profile.step;
@@ -1611,6 +1615,15 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		await this.saveSettings(true);
 	}
 
+	async setLinkAnimationStyle(style) {
+		this.settings.motion.lineAnimationStyle = style;
+		if (style !== 'none') {
+			this.settings.motion.animationEnabled = true;
+			if (this.settings.motion.reduceMotion) new Notice('Turn off Reduce Motion to animate note connections.');
+		}
+		await this.saveSettings();
+	}
+
 	async applyPreset(id) {
 		const presets = {
 			constellation: { visual: 'constellation', colors: 'clusters', motion: { animationStyle: 'cluster-orbit', animationSpeed: 0.55, cameraSpeed: 0.35, reduceMotion: false, glowEnabled: true } },
@@ -1763,7 +1776,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(this.currentSection, 'Cluster visit interval (seconds)', 'How long the camera stays with each folder cluster.', 'motion', 'clusterPauseSeconds', 2, 30, 1);
 		this.slider(this.currentSection, 'Moving note distance', 'Set how far individual notes drift.', 'motion', 'nodeDriftStrength', 0.01, 0.5, 0.01);
 		this.slider(this.currentSection, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
-		this.dropdown(this.currentSection, 'Link animation', 'Choose how motion travels along connections.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' });
+		this.dropdown(this.currentSection, 'Link animation', 'Animate real note connections, including links between clusters. Keep Link lines enabled; choosing a style starts animation.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' }, (value) => this.plugin.setLinkAnimationStyle(value));
 		this.dropdown(this.currentSection, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
 		this.slider(this.currentSection, '3D perspective depth', 'Increase or soften the perspective difference between near and far notes.', 'motion', 'perspectiveStrength', 0.2, 2.4, 0.1);
 		this.toggle(this.currentSection, 'Reduce motion', 'Use a calmer camera with less ambient movement.', 'motion', 'reduceMotion');
