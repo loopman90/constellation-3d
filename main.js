@@ -152,7 +152,7 @@ const DEFAULT_SETTINGS = {
 		showGraphStats: true,
 		showQuickMenu: true,
 		quickMenuItems: { search: true, scope: true, discovery: true, animationStyle: true, colors: true, journey: true, cameraMode: true, animationToggle: true, controlPanel: true, fit: true, optimize: true, refresh: true, notePath: true },
-		showFooter: true,
+		showFooter: false,
 		showLabels: true,
 		showLinks: true,
 		showSceneBackground: true,
@@ -164,7 +164,7 @@ const DEFAULT_SETTINGS = {
 		nodeSize: 1,
 		showNodeIcons: false,
 		showDepthLayers: true,
-		showClusterHalos: true,
+		showClusterHalos: false,
 		showVaultNotesCounter: true,
 		showLinkedNotesCounter: true,
 		showFolderCounter: true,
@@ -1279,7 +1279,7 @@ class SwarmGraphView extends ItemView {
 		const hoveredNeighborhood = new Set(hoveredNode ? [hoveredNode.path] : []);
 		if (hoveredNode) for (const path of this.adjacency.get(hoveredNode.path) || []) if (renderNodePaths.has(path)) hoveredNeighborhood.add(path);
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
-		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height, visual, this.renderClusterGroups);
+		if (display.showClusterHalos) this.drawClusterHalos(ctx, width, height, visual, this.renderClusterGroups);
 		if (simplifiedRendering) ctx.setLineDash([]);
 		let crossClusterIndex = 0;
 		for (let edgeIndex = 0; edgeIndex < sortedEdges.length; edgeIndex++) {
@@ -2229,7 +2229,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
 		this.toggle(this.currentSection, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
 		this.toggle(this.currentSection, 'FAR / MID / NEAR depth rings', 'Show or hide the labeled FAR, MID, and NEAR perspective rings.', 'display', 'showDepthLayers');
-		this.toggle(this.currentSection, 'Cluster halos', 'Draw a boundary around notes in the same folder cluster.', 'display', 'showClusterHalos');
+		this.toggle(this.currentSection, 'Cluster halos', 'Draw a boundary around notes in the same cluster. Available for all rendering quality levels.', 'display', 'showClusterHalos');
 		this.slider(this.currentSection, 'Label size', 'Set the size of note names.', 'display', 'labelSize', 8, 18, 1);
 		this.slider(this.currentSection, 'Node size', 'Scale the note markers.', 'display', 'nodeSize', 0.5, 2, 0.1);
 		this.slider(this.currentSection, 'Link thickness', 'Scale the lines between linked notes.', 'display', 'edgeThickness', 0.4, 2, 0.1);
