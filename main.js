@@ -2,13 +2,72 @@ const { Plugin, PluginSettingTab, Setting, ItemView, Menu, Notice, setIcon } = r
 
 const VIEW_TYPE = 'swarm-console-graph';
 const COLOR_SCHEME_OPTIONS = {
-	aurora: 'Aurora', 'rainbow-flow': 'Rainbow Flow', 'deep-ocean': 'Deep Ocean', monochrome: 'Monochrome',
-	sunset: 'Sunset', forest: 'Forest', pastel: 'Pastel', 'custom-palette': 'Custom Palette',
-	'tag-based': 'Tag Based', 'folder-based': 'Folder Based', clusters: 'Cluster Based', 'animated-gradient': 'Animated Gradient',
-	heatmap: 'Heatmap', 'age-gradient': 'Age Gradient', 'age-based': 'Age Based', 'galaxy-core': 'Galaxy Core',
-	'terminal-amber': 'Terminal Amber', violet: 'Violet Cosmos', ember: 'Solar Ember', 'single-color': 'Single Color',
-	'dual-color': 'Dual Color', 'multi-color': 'Multi Color', gradient: 'Gradient', rainbow: 'Rainbow',
-	'connection-count': 'Connection Count', 'activity-based': 'Activity Based',
+	'age-gradient': 'Age Gradient', 'aqua-mint': 'Aqua Mint', 'archive-dust': 'Archive Dust', arctic: 'Arctic', aurora: 'Aurora',
+	blueprint: 'Blueprint', candy: 'Candy', 'city-nights': 'City Nights', clusters: 'Cluster Based', 'cluster-neon': 'Cluster Neon',
+	'constellation-white': 'Constellation White', 'copper-blue': 'Copper Blue', crystal: 'Crystal', cyberpunk: 'Cyberpunk',
+	'dark-mode': 'Dark Mode', 'deep-ocean': 'Deep Ocean', 'electric-lime': 'Electric Lime', 'ember-profile': 'Ember',
+	'focus-fade': 'Focus Fade', forest: 'Forest', 'galaxy-core': 'Galaxy Core', glacier: 'Glacier', graphite: 'Graphite',
+	heatmap: 'Heatmap', 'high-contrast': 'High Contrast', infrared: 'Infrared', ink: 'Ink', lava: 'Lava',
+	'library-night': 'Library Night', meadow: 'Meadow', 'midnight-gold': 'Midnight Gold', mint: 'Mint', 'moss-gold': 'Moss & Gold',
+	'night-vision': 'Night Vision', nord: 'Nord', 'notebook-blue': 'Notebook Blue', 'ocean-depths': 'Ocean Depths',
+	'ocean-sunset': 'Ocean Sunset', 'paper-minimal': 'Paper Minimal', pastel: 'Pastel', pearl: 'Pearl', 'polar-night': 'Polar Night',
+	'prism-flow': 'Prism Flow', 'rainbow-flow': 'Rainbow Flow', 'red-alert': 'Red Alert', 'rose-garden': 'Rose Garden',
+	'ruby-graph': 'Ruby Graph', 'sepia-archive': 'Sepia Archive', 'signal-strength': 'Signal Strength',
+	'soft-lavender': 'Soft Lavender', 'solar-system': 'Solar System', solarized: 'Solarized', 'star-map': 'Star Map', sunset: 'Sunset',
+	'terminal-amber': 'Terminal Amber', vaporwave: 'Vaporwave', 'violet-storm': 'Violet Storm', 'zen-garden': 'Zen Garden',
+	'activity-based': 'Activity Based', 'age-based': 'Age Based', 'animated-gradient': 'Animated Gradient', 'connection-count': 'Connection Count',
+	'custom-palette': 'Custom Palette', 'dual-color': 'Dual Color', 'folder-based': 'Folder Based', gradient: 'Gradient',
+	'multi-color': 'Multi Color', monochrome: 'Monochrome', rainbow: 'Rainbow', 'single-color': 'Single Color',
+	'tag-based': 'Tag Based', ember: 'Solar Ember', violet: 'Violet Cosmos',
+};
+const COLOR_PROFILE_CONFIG = {
+	'aqua-mint': { hue: 164, step: 13, saturation: 0.72, lightness: 0.59 },
+	'archive-dust': { hue: 32, step: 18, saturation: 0.37, lightness: 0.66 },
+	arctic: { hue: 198, step: 11, saturation: 0.48, lightness: 0.76 },
+	blueprint: { hue: 212, step: 9, saturation: 0.83, lightness: 0.67 },
+	candy: { hue: 326, step: 17, saturation: 0.78, lightness: 0.72 },
+	'city-nights': { hue: 270, step: 24, saturation: 0.68, lightness: 0.61 },
+	'cluster-neon': { hue: 176, step: 39, saturation: 0.98, lightness: 0.64 },
+	'constellation-white': { hue: 204, step: 8, saturation: 0.3, lightness: 0.86 },
+	'copper-blue': { hues: [205, 27], step: 8, saturation: 0.78, lightness: 0.64 },
+	crystal: { hue: 189, step: 23, saturation: 0.58, lightness: 0.79 },
+	cyberpunk: { hue: 310, step: 51, saturation: 0.96, lightness: 0.62 },
+	'dark-mode': { hue: 218, step: 13, saturation: 0.38, lightness: 0.58 },
+	'electric-lime': { hue: 88, step: 9, saturation: 0.96, lightness: 0.62 },
+	'ember-profile': { hue: 12, step: 15, saturation: 0.88, lightness: 0.59 },
+	'focus-fade': { hue: 192, step: 18, saturation: 0.78, lightness: 0.62, focusFade: true },
+	glacier: { hue: 187, step: 12, saturation: 0.43, lightness: 0.74 },
+	graphite: { hue: 210, step: 7, saturation: 0.18, lightness: 0.64 },
+	'high-contrast': { hue: 48, step: 57, saturation: 0.98, lightness: 0.62 },
+	infrared: { hue: 352, step: 13, saturation: 0.93, lightness: 0.56 },
+	ink: { hue: 224, step: 7, saturation: 0.37, lightness: 0.64 },
+	lava: { hue: 5, step: 18, saturation: 0.97, lightness: 0.56 },
+	'library-night': { hue: 34, step: 10, saturation: 0.62, lightness: 0.67 },
+	meadow: { hue: 112, step: 17, saturation: 0.59, lightness: 0.62 },
+	'midnight-gold': { hue: 43, step: 10, saturation: 0.89, lightness: 0.62 },
+	mint: { hue: 153, step: 11, saturation: 0.67, lightness: 0.68 },
+	'moss-gold': { hues: [94, 45], step: 10, saturation: 0.67, lightness: 0.6 },
+	'night-vision': { hue: 116, step: 8, saturation: 0.96, lightness: 0.57 },
+	nord: { hue: 202, step: 14, saturation: 0.44, lightness: 0.69 },
+	'notebook-blue': { hue: 215, step: 9, saturation: 0.65, lightness: 0.67 },
+	'ocean-depths': { hue: 195, step: 13, saturation: 0.78, lightness: 0.53 },
+	'ocean-sunset': { hue: 202, step: 33, saturation: 0.77, lightness: 0.62 },
+	'paper-minimal': { hue: 42, step: 12, saturation: 0.28, lightness: 0.72 },
+	pearl: { hue: 285, step: 23, saturation: 0.35, lightness: 0.82 },
+	'polar-night': { hue: 223, step: 14, saturation: 0.64, lightness: 0.67 },
+	'prism-flow': { hue: 0, step: 47, saturation: 0.9, lightness: 0.65, animated: true },
+	'red-alert': { hue: 0, step: 8, saturation: 0.96, lightness: 0.58 },
+	'rose-garden': { hue: 338, step: 19, saturation: 0.64, lightness: 0.68 },
+	'ruby-graph': { hue: 350, step: 12, saturation: 0.87, lightness: 0.58 },
+	'sepia-archive': { hue: 29, step: 12, saturation: 0.56, lightness: 0.61 },
+	'signal-strength': { hue: 122, step: 0, saturation: 0.82, lightness: 0.52, byDegree: true },
+	'soft-lavender': { hue: 267, step: 15, saturation: 0.48, lightness: 0.76 },
+	'solar-system': { hue: 35, step: 37, saturation: 0.86, lightness: 0.62 },
+	solarized: { hue: 193, step: 22, saturation: 0.55, lightness: 0.62 },
+	'star-map': { hue: 220, step: 27, saturation: 0.32, lightness: 0.82 },
+	vaporwave: { hue: 296, step: 31, saturation: 0.89, lightness: 0.66 },
+	'violet-storm': { hue: 274, step: 21, saturation: 0.81, lightness: 0.62 },
+	'zen-garden': { hue: 133, step: 17, saturation: 0.38, lightness: 0.69 },
 };
 const COLOR_PALETTES = {
 	clusters: ['103, 224, 221', '255, 115, 180', '255, 199, 95', '156, 132, 255', '121, 226, 148', '255, 143, 100'],
@@ -1126,6 +1185,16 @@ class SwarmGraphView extends ItemView {
 		}
 		const palette = this.cachedCustomPalette?.length ? this.cachedCustomPalette : COLOR_PALETTES.clusters;
 		const paletteColor = (colors, index) => colors[Math.abs(index) % colors.length];
+		const profile = COLOR_PROFILE_CONFIG[scheme];
+		if (profile) {
+			const profileIndex = profile.byDegree ? Math.round(degreeRatio * 5) : node.clusterId;
+			const profileHue = profile.hues
+				? profile.hues[Math.abs(profileIndex) % profile.hues.length] + Math.floor(Math.abs(profileIndex) / profile.hues.length) * profile.step
+				: profile.hue + profileIndex * profile.step;
+			const profileSaturation = profile.saturation * (profile.focusFade && !node.focused && !node.hovered ? 0.32 : 1);
+			const profileLightness = profile.byDegree ? profile.lightness + degreeRatio * 0.16 : profile.lightness;
+			return colorFromHsl(profileHue + (profile.animated ? animationOffset : 0), profileSaturation, profileLightness);
+		}
 		switch (scheme) {
 		case 'deep-ocean': return node.degree > 5 ? '104, 166, 255' : '93, 218, 229';
 		case 'monochrome': return '198, 211, 220';
