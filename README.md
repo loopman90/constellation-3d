@@ -18,7 +18,7 @@ The plugin reads Markdown note paths, modification times, tags, and Obsidian's l
 - **Inspect and organize visually:** click a node to open its note; hover to highlight direct neighbors; right-click to pin or hide a specific note or its folder cluster, or preview a route through linked notes. Restore items individually from **Hidden items** in the Control Panel.
 - **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, depth guide rings, cluster halos, node size, link thickness, and the FPS display.
 - **Customize the interface:** turn the header, graph title, node/link totals, Quick Menu, and bottom dashboard on or off. Show only the counters and recent changes you want, alongside the existing label, link, icon, depth, and halo controls.
-- **Keep large graphs responsive:** search waits briefly until you pause typing before rebuilding the graph. Large graphs automatically use a lighter drawing mode; in very large graphs, up to 12,000 of the strongest links are drawn. Link animation runs on a representative sample; required route links are also kept visible.
+- **Keep large graphs responsive:** search waits briefly until you pause typing before rebuilding the graph. Larger graphs automatically simplify node effects and sample link lines while keeping route links visible. For extra smoothness, pause animation or turn down background particles and link display in the Control Panel.
 - **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view, while **Optimize View** automatically frames all currently visible notes.
 
 ## Install in Obsidian

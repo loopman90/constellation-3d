@@ -163,6 +163,8 @@ class SwarmGraphView extends ItemView {
 		this.backgroundParticles = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), size: 0.35 + Math.random() * 1.2, phase: Math.random() * Math.PI * 2 }));
 		this.fpsFrames = 0;
 		this.fpsLast = performance.now();
+		this.lastClockSecond = -1;
+		this.lastFpsLabel = '';
 		this.journeyTimer = null;
 		this.journeyNodes = [];
 		this.journeyIndex = -1;
@@ -616,6 +618,13 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		this.nodeByPath = new Map(this.nodes.map((node) => [node.path, node]));
+		const groupsForDrawing = new Map();
+		for (const node of this.nodes) {
+			if (!groupsForDrawing.has(node.clusterName)) groupsForDrawing.set(node.clusterName, []);
+			groupsForDrawing.get(node.clusterName).push(node);
+		}
+		this.clusterGroups = [...groupsForDrawing.values()];
+		this.clusterTourTargets = [...groupsForDrawing.values()].map((nodes) => nodes[0]).sort((a, b) => a.clusterId - b.clusterId);
 		this.pathDisplayBySource = pathToDisplayPath;
 		const aggregatedEdges = new Map();
 		for (const edge of visibleEdges) {
@@ -795,9 +804,12 @@ class SwarmGraphView extends ItemView {
 	resizeCanvas() {
 		if (!this.canvas) return;
 		const rect = this.canvas.getBoundingClientRect();
-		const dpr = window.devicePixelRatio || 1;
-		this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-		this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+		const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+		const canvasWidth = Math.max(1, Math.floor(rect.width * dpr));
+		const canvasHeight = Math.max(1, Math.floor(rect.height * dpr));
+		if (this.canvas.width === canvasWidth && this.canvas.height === canvasHeight) return;
+		this.canvas.width = canvasWidth;
+		this.canvas.height = canvasHeight;
 		this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 		this.scheduleDraw();
 	}
@@ -842,16 +854,18 @@ class SwarmGraphView extends ItemView {
 		const ctx = this.ctx;
 		const width = this.canvas.clientWidth;
 		const height = this.canvas.clientHeight;
+		if (!width || !height) return;
 		ctx.clearRect(0, 0, width, height);
 		const motion = this.plugin.settings.motion;
 		const display = this.plugin.settings.display;
+		const visual = this.plugin.settings.visual;
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
 		this.drawBackground(ctx, width, height, motion);
 		const timelineMode = this.plugin.settings.visual === 'timeline-map';
 		const animatedSpin = timelineMode || this.manualCameraControl ? 0 : this.frame * 0.0018 * (motion.reduceMotion ? 0.2 : motion.cameraSpeed);
 		let focusedNode = this.manualCameraControl ? null : this.nodeByPath.get(this.focusedPath);
 		if (!this.manualCameraControl && !focusedNode && motion.animationStyle === 'cluster-tour' && this.nodes.length) {
-			const clusters = [...new Map(this.nodes.map((node) => [node.clusterName, node])).values()].sort((a, b) => a.clusterId - b.clusterId);
+			const clusters = this.clusterTourTargets || [];
 			const pause = Math.max(1, motion.clusterPauseSeconds) * 1000;
 			const activeCluster = clusters[Math.floor(Date.now() / pause) % clusters.length];
 			if (activeCluster) focusedNode = { x: activeCluster.clusterCenterX, y: activeCluster.clusterCenterY, z: activeCluster.clusterCenterZ };
@@ -917,15 +931,17 @@ class SwarmGraphView extends ItemView {
 			node.screenY = height / 2 + this.panY + ry * radius * perspective + node.offsetY * height;
 			node.depth = depth;
 			node.perspective = perspective;
+			node.color = this.getNodeColor(node);
 		}
 		const nodeMap = this.nodeByPath;
-		const simplifiedRendering = this.nodes.length > 700 || this.renderEdges.length > 4000;
+		const simplifiedRendering = this.nodes.length > 240 || this.renderEdges.length > 1400;
 		const sortedEdges = simplifiedRendering ? this.renderEdges : [...this.renderEdges].sort((a, b) => {
 			const depthA = (nodeMap.get(a.source)?.depth || 0) + (nodeMap.get(a.target)?.depth || 0);
 			const depthB = (nodeMap.get(b.source)?.depth || 0) + (nodeMap.get(b.target)?.depth || 0);
 			return depthA - depthB;
 		});
-		const animationStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 1200)) : 1;
+		const edgeStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 2400)) : 1;
+		const animationStride = simplifiedRendering ? Math.max(1, Math.ceil(sortedEdges.length / 900)) : 1;
 		const interaction = this.plugin.settings.interaction;
 		const routeEdges = new Set();
 		const routeNodes = new Set();
@@ -948,12 +964,14 @@ class SwarmGraphView extends ItemView {
 		if (display.showDepthLayers) this.drawDepthLayers(ctx, width, height, radius);
 		if (display.showClusterHalos && !simplifiedRendering) this.drawClusterHalos(ctx, width, height, visual);
 		if (simplifiedRendering) ctx.setLineDash([]);
-		for (const [edgeIndex, edge] of sortedEdges.entries()) {
+		for (let edgeIndex = 0; edgeIndex < sortedEdges.length; edgeIndex++) {
+			const edge = sortedEdges[edgeIndex];
 			const animateLine = !simplifiedRendering || edgeIndex % animationStride === 0;
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
 			if (!a || !b) continue;
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
+			if (edgeIndex % edgeStride !== 0 && !isRoute) continue;
 			if (!display.showLinks && !isRoute) continue;
 			const isClusterLink = a.clusterId !== b.clusterId;
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(edge.source) && hoveredNeighborhood.has(edge.target);
@@ -968,7 +986,7 @@ class SwarmGraphView extends ItemView {
 				const bend = ((edge.renderIndex % 2) ? 1 : -1) * Math.min(45, Math.hypot(b.screenX - a.screenX, b.screenY - a.screenY) * 0.15);
 				ctx.quadraticCurveTo((a.screenX + b.screenX) / 2 + bend, (a.screenY + b.screenY) / 2 - bend, b.screenX, b.screenY);
 			} else ctx.lineTo(b.screenX, b.screenY);
-			const linkColor = this.getNodeColor(a);
+			const linkColor = a.color;
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : isClusterLink ? `rgba(190, 225, 255, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
@@ -1024,13 +1042,12 @@ class SwarmGraphView extends ItemView {
 			}
 		}
 		const orderedNodes = simplifiedRendering ? this.nodes : [...this.nodes].sort((a, b) => a.depth - b.depth);
-		const visual = this.plugin.settings.visual;
 		const activeNodePath = this.app.workspace.getActiveFile()?.path;
 		const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' || visual === 'deep-space' || visual === 'star-system' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
 		for (const node of orderedNodes) {
 			const pulse = simplifiedRendering ? 1 : 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
-			const hue = this.getNodeColor(node);
+			const hue = node.color;
 			if (!simplifiedRendering && motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
 				ctx.beginPath();
 				this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
@@ -1075,16 +1092,26 @@ class SwarmGraphView extends ItemView {
 				ctx.fillText(node.name.slice(0, 26), node.screenX + nodeRadius + 5, node.screenY + 3);
 			}
 		}
-		this.clock?.setText(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+		const clockSecond = Math.floor(Date.now() / 1000);
+		if (clockSecond !== this.lastClockSecond) {
+			const clockLabel = new Date(clockSecond * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+			this.clock?.setText(clockLabel);
+			this.lastClockSecond = clockSecond;
+		}
 		if (display.showFps) {
 			this.fpsFrames++;
 			const now = performance.now();
 			if (now - this.fpsLast >= 1000) {
-				this.fpsIndicator?.setText(`${Math.round(this.fpsFrames * 1000 / (now - this.fpsLast))} FPS`);
+				const fpsLabel = `${Math.round(this.fpsFrames * 1000 / (now - this.fpsLast))} FPS`;
+				if (fpsLabel !== this.lastFpsLabel) this.fpsIndicator?.setText(fpsLabel);
+				this.lastFpsLabel = fpsLabel;
 				this.fpsFrames = 0;
 				this.fpsLast = now;
 			}
-		} else this.fpsIndicator?.setText('');
+		} else if (this.lastFpsLabel) {
+			this.fpsIndicator?.setText('');
+			this.lastFpsLabel = '';
+		}
 		if (motion.animationEnabled || (interaction.pathPreview.length && motion.pathAnimationStyle !== 'static' && !motion.reduceMotion)) this.scheduleDraw();
 	}
 
@@ -1233,13 +1260,9 @@ class SwarmGraphView extends ItemView {
 	}
 
 	drawClusterHalos(ctx, width, height, visual = this.plugin.settings.visual) {
-		const groups = new Map();
-		for (const node of this.nodes) {
-			if (!groups.has(node.clusterName)) groups.set(node.clusterName, []);
-			groups.get(node.clusterName).push(node);
-		}
+		const groups = this.clusterGroups || [];
 		const palette = ['103,224,221', '255,115,180', '255,199,95', '156,132,255', '121,226,148', '255,143,100'];
-		for (const nodes of groups.values()) {
+		for (const nodes of groups) {
 			if (nodes.length < 2) continue;
 			const cx = nodes.reduce((sum, node) => sum + node.screenX, 0) / nodes.length;
 			const cy = nodes.reduce((sum, node) => sum + node.screenY, 0) / nodes.length;
@@ -1470,6 +1493,9 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on('delete', (file) => this.recordActivity('DELETE', file)));
 		this.registerEvent(this.app.metadataCache.on('resolved', () => this.refreshView()));
 		this.registerEvent(this.app.workspace.on('file-open', () => this.refreshView()));
+		this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf) => {
+			if (leaf?.view instanceof SwarmGraphView) leaf.view.scheduleDraw();
+		}));
 	}
 
 	async activateView() {
