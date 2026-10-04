@@ -2,7 +2,7 @@
 
 Constellation 3D turns the links between your Obsidian notes into an interactive, animated 3D space. Each note is a node; links between notes are the lines connecting them. Move through the space, follow paths, and spot the folders and notes that shape your knowledge network.
 
-The plugin reads Obsidian's local note and link metadata. It does not edit your notes or send vault data to a server.
+The plugin reads Markdown note paths, modification times, tags, and Obsidian's local resolved links to build the graph and counters. It uses Obsidian's metadata cache for note links and tags; it does not read note bodies or send vault data to a server. Notes are enumerated locally because the global graph, folder clusters, and vault counters need the list of Markdown notes.
 
 ## What you can do
 

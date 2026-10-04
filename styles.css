@@ -21,7 +21,7 @@
 .swarm-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .swarm-quickbar { position: absolute; z-index: 2; top: 38px; left: 18px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 36px); }
 .swarm-quick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.swarm-header.is-hidden, .swarm-quickbar.is-hidden, .swarm-show-menu.is-hidden, .swarm-graph-label.is-hidden, .swarm-graph-stats.is-hidden, .swarm-metric.is-hidden, .swarm-activity.is-hidden, .swarm-footer.is-hidden { display: none !important; }
+.swarm-console-view .swarm-header.is-hidden, .swarm-console-view .swarm-quickbar.is-hidden, .swarm-console-view .swarm-show-menu.is-hidden, .swarm-console-view .swarm-graph-label.is-hidden, .swarm-console-view .swarm-graph-stats.is-hidden, .swarm-console-view .swarm-metric.is-hidden, .swarm-console-view .swarm-activity.is-hidden, .swarm-console-view .swarm-footer.is-hidden { display: none; }
 .swarm-show-menu { position: absolute; z-index: 2; top: 38px; left: 18px; }
 .swarm-search, .swarm-select { height: 28px; border: 1px solid var(--swarm-border); border-radius: 2px; background: rgba(8, 14, 20, .86); color: #aebfc9; font: 9px var(--font-monospace); }
 .swarm-search { width: 180px; padding: 0 8px; }
@@ -53,7 +53,7 @@
 .swarm-camera-controls .setting-item-control input[type="range"] { width: 90px; }
 .swarm-camera-controls .setting-item-description { display: none; }
 .swarm-camera-controls .setting-item:last-child { padding-bottom: 0; }
-.swarm-hidden-items-manager .setting-item { align-items: center !important; }
+.swarm-control-panel-body .swarm-hidden-items-manager .setting-item { align-items: center; }
 .swarm-keyboard-help { margin: 8px 0 2px; padding: 8px 10px; border: 1px solid var(--swarm-border); border-radius: 6px; color: var(--text-muted, #8295a1); }
 .swarm-keyboard-help-title { color: var(--swarm-cyan); font: 600 9px var(--font-monospace); letter-spacing: .1em; }
 .swarm-keyboard-help p { margin: 5px 0 0; font-size: 10px; line-height: 1.5; }
