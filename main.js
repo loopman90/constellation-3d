@@ -132,6 +132,9 @@ const DEFAULT_SETTINGS = {
 		colorAnimationEnabled: true,
 		animationStyle: 'static',
 		qualityMode: 'auto',
+		maxVisibleNodes: 600,
+		maxVisibleLinks: 400,
+		frameRate: 30,
 		animationSpeed: 0.55,
 		cameraSpeed: 0.35,
 		clusterPauseSeconds: 6,
@@ -278,6 +281,8 @@ class SwarmGraphView extends ItemView {
 
 	async onClose() {
 		window.cancelAnimationFrame(this.animation);
+		window.clearTimeout(this.drawTimer);
+		window.clearTimeout(this.graphRefreshTimer);
 		if (this.journeyTimer) window.clearInterval(this.journeyTimer);
 		window.clearTimeout(this.searchTimer);
 		this.resizeObserver?.disconnect();
@@ -539,6 +544,8 @@ class SwarmGraphView extends ItemView {
 
 	rebuildGraph() {
 		const buildStartedAt = performance.now();
+		this.autoQualityFloor = 'full';
+		this.averageDrawMs = 0;
 		this.spaceflightWaypoints = null;
 		const graphSettings = this.plugin.settings.graph;
 		const discoverySettings = this.plugin.settings.discovery;
@@ -803,11 +810,14 @@ class SwarmGraphView extends ItemView {
 	resolveRenderQuality() {
 		const requested = this.plugin.settings.motion.qualityMode || 'auto';
 		if (requested === 'balanced' || requested === 'performance') return requested;
-		const nodeCount = this.nodes.length;
-		const edgeCount = this.edges.length;
-		if (nodeCount > 600 || edgeCount > 1800 || this.averageDrawMs > 20) return 'performance';
-		if (nodeCount > 180 || edgeCount > 500 || this.averageDrawMs > 12) return 'balanced';
-		return 'full';
+		let quality = 'full';
+		if (this.nodes.length > 600 || this.edges.length > 1800 || this.averageDrawMs > 20) quality = 'performance';
+		else if (this.nodes.length > 180 || this.edges.length > 500 || this.averageDrawMs > 12) quality = 'balanced';
+		// Hold automatic reductions until the next graph build, rather than repeatedly
+		// switching quality and reallocating the canvas when cheaper frames get faster.
+		const ranks = { full: 0, balanced: 1, performance: 2 };
+		if (ranks[quality] > ranks[this.autoQualityFloor || 'full']) this.autoQualityFloor = quality;
+		return this.autoQualityFloor || quality;
 	}
 
 	buildRenderLevels() {
@@ -868,13 +878,16 @@ class SwarmGraphView extends ItemView {
 			const clusters = this.clusterGroups.map((group) => group.filter((node) => selectedPaths.has(node.path))).filter((group) => group.length);
 			return { nodes, edges: chosen, clusters };
 		};
-		return { full, balanced: buildLevel(1000, 420), performance: buildLevel(420, 150) };
+		const nodeLimit = Math.max(100, Math.min(3000, Number(this.plugin.settings.motion.maxVisibleNodes) || 600));
+		const edgeLimit = Math.max(50, Math.min(2000, Number(this.plugin.settings.motion.maxVisibleLinks) || 400));
+		return { full: buildLevel(nodeLimit, edgeLimit), balanced: buildLevel(Math.min(nodeLimit, 800), Math.min(edgeLimit, 400)), performance: buildLevel(Math.min(nodeLimit, 300), Math.min(edgeLimit, 120)) };
 	}
 
 	selectRenderLevel(quality) {
 		const level = this.renderLevels[quality] || this.renderLevels.full || { nodes: this.nodes, edges: this.fullRenderEdges, clusters: this.clusterGroups };
 		this.renderQuality = quality;
 		this.renderNodes = level.nodes;
+		this.renderNodePaths = new Set(level.nodes.map((node) => node.path));
 		this.renderEdges = level.edges;
 		this.renderClusterGroups = level.clusters;
 		this.renderClusterLinkCount = this.renderEdges.reduce((total, edge) => total + (this.nodeByPath.get(edge.source)?.clusterId !== this.nodeByPath.get(edge.target)?.clusterId ? 1 : 0), 0);
@@ -1145,7 +1158,7 @@ class SwarmGraphView extends ItemView {
 			this.resizeCanvas();
 		}
 		const renderNodes = this.renderNodes;
-		const renderNodePaths = new Set(renderNodes.map((node) => node.path));
+		const renderNodePaths = this.renderNodePaths || new Set();
 		const animationClock = performance.now() * 0.06 * motion.animationSpeed;
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
 		const spaceflightActive = motion.animationStyle === 'spaceflight' && motion.animationEnabled && !motion.reduceMotion && !this.manualCameraControl && this.nodes.length > 0;
@@ -1287,6 +1300,7 @@ class SwarmGraphView extends ItemView {
 			const a = nodeMap.get(edge.source);
 			const b = nodeMap.get(edge.target);
 			if (!a || !b) continue;
+			if ((a.screenX < 0 && b.screenX < 0) || (a.screenX > width && b.screenX > width) || (a.screenY < 0 && b.screenY < 0) || (a.screenY > height && b.screenY > height)) continue;
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
 			const isClusterLink = a.clusterId !== b.clusterId;
 			const keepClusterLink = isClusterLink && crossClusterIndex++ % crossClusterStride === 0;
@@ -1364,10 +1378,11 @@ class SwarmGraphView extends ItemView {
 		const activeNodePath = this.app.workspace.getActiveFile()?.path;
 		const glowScale = visual === 'neon' || visual === 'neural-bloom' || visual === 'soft-glow' || visual === 'deep-space' || visual === 'star-system' ? 3.8 : visual === 'glass-minimal' || visual === 'minimal' || visual === 'circuit-minimal' ? 1.8 : 2.7;
 		for (const node of orderedNodes) {
+			if (!Number.isFinite(node.screenX) || !Number.isFinite(node.screenY) || node.screenX < -40 || node.screenX > width + 40 || node.screenY < -40 || node.screenY > height + 40) continue;
 			const pulse = simplifiedRendering ? 1 : 0.78 + Math.sin(this.frame * 0.018 + node.phase) * 0.22;
 			const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
 			const hue = node.color;
-			if (!simplifiedRendering && motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
+			if (motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
 				ctx.beginPath();
 				this.traceNodeShape(ctx, node.screenX, node.screenY, nodeRadius * glowScale * pulse, visual);
 				const glowAlpha = Math.max(0.11, Math.min(0.26, 0.16 + node.depth * 0.025));
@@ -1375,7 +1390,7 @@ class SwarmGraphView extends ItemView {
 				ctx.fill();
 			}
 			ctx.save();
-			if (motion.glowEnabled && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
+			if (motion.glowEnabled && (!simplifiedRendering || node.hovered || node.focused) && !['minimal', 'circuit-minimal', 'glass-minimal', 'academic-light', 'ink-map', 'research-board'].includes(visual)) {
 				ctx.shadowColor = `rgba(${hue}, .9)`;
 				ctx.shadowBlur = Math.max(7, nodeRadius * 2.2);
 			}
@@ -1436,6 +1451,7 @@ class SwarmGraphView extends ItemView {
 			ctx.lineJoin = 'round';
 			ctx.strokeStyle = lightStyle ? 'rgba(255,255,255,.88)' : 'rgba(3,8,12,.88)';
 			for (const node of orderedNodes) {
+				if (node.screenX < -40 || node.screenX > width + 40 || node.screenY < -40 || node.screenY > height + 40) continue;
 				const isRouteNode = routeNodes.has(node.path);
 				if (!node.hovered && !node.focused && !isRouteNode && node.index % labelStride !== 0) continue;
 				const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
@@ -1818,20 +1834,29 @@ class SwarmGraphView extends ItemView {
 	}
 
 	scheduleDraw() {
-		if (this.animation || !this.canvas?.isConnected || document.hidden) return;
-		this.animation = window.requestAnimationFrame(() => {
-			this.animation = 0;
-			if (document.hidden) return;
-			const fps = this.renderQuality === 'performance' ? 24 : this.renderQuality === 'balanced' ? 30 : 30;
-			const minimumFrameTime = 1000 / fps;
-			const now = performance.now();
-			if (this.lastFrameAt && now - this.lastFrameAt < minimumFrameTime) {
-				this.scheduleDraw();
-				return;
-			}
-			this.lastFrameAt = now;
-			this.draw();
-		});
+		if (this.animation || this.drawTimer || !this.canvas?.isConnected || document.hidden || !this.canvas.getClientRects().length) return;
+		const requestedFps = Math.max(15, Math.min(60, Number(this.plugin.settings.motion.frameRate) || 30));
+		const fps = this.renderQuality === 'performance' ? Math.min(24, requestedFps) : requestedFps;
+		const delay = Math.max(0, 1000 / fps - (performance.now() - (this.lastFrameAt || 0)));
+		const queueFrame = () => {
+			this.drawTimer = 0;
+			this.animation = window.requestAnimationFrame(() => {
+				this.animation = 0;
+				if (document.hidden || !this.canvas?.isConnected || !this.canvas.getClientRects().length) return;
+				this.lastFrameAt = performance.now();
+				this.draw();
+			});
+		};
+		if (delay > 1) this.drawTimer = window.setTimeout(queueFrame, delay);
+		else queueFrame();
+	}
+
+	queueGraphRefresh() {
+		window.clearTimeout(this.graphRefreshTimer);
+		this.graphRefreshTimer = window.setTimeout(() => {
+			this.graphRefreshTimer = 0;
+			if (this.canvas?.isConnected) this.rebuildGraph();
+		}, 300);
 	}
 
 	updateControlLabels() {
@@ -1983,16 +2008,17 @@ class SwarmGraphView extends ItemView {
 			return;
 		}
 		const found = this.findNode(event);
+		const hoverChanged = this.hoveredNode !== found;
 		if (this.hoveredNode && this.hoveredNode !== found) this.hoveredNode.hovered = false;
 		if (found) found.hovered = true;
 		this.hoveredNode = found;
-		if (!found) { this.tooltip.addClass('is-hidden'); this.scheduleDraw(); return; }
+		if (!found) { this.tooltip.addClass('is-hidden'); if (hoverChanged) this.scheduleDraw(); return; }
 		this.tooltip.setText(found.isClusterSummary ? `${found.clusterName}  ·  ${found.clusterCount} notes  ·  click to expand` : `${found.name}  ·  ${found.degree} links  ·  ${found.folder}`);
 		this.tooltip.style.left = `${event.clientX - this.canvas.getBoundingClientRect().left + 14}px`;
 		this.tooltip.style.top = `${event.clientY - this.canvas.getBoundingClientRect().top + 14}px`;
 		this.tooltip.removeClass('is-hidden');
-		this.canvas.style.cursor = found ? 'grab' : 'grab';
-		this.scheduleDraw();
+		this.canvas.style.cursor = 'grab';
+		if (hoverChanged) this.scheduleDraw();
 	}
 
 	onCanvasClick(event) {
@@ -2026,8 +2052,11 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on('create', (file) => this.recordActivity('NEW', file)));
 		this.registerEvent(this.app.vault.on('modify', (file) => this.recordActivity('EDIT', file)));
 		this.registerEvent(this.app.vault.on('delete', (file) => this.recordActivity('DELETE', file)));
-		this.registerEvent(this.app.metadataCache.on('resolved', () => this.refreshView()));
-		this.registerEvent(this.app.workspace.on('file-open', () => this.refreshView()));
+		this.registerEvent(this.app.metadataCache.on('resolved', () => this.queueRefreshView()));
+		this.registerEvent(this.app.workspace.on('file-open', () => {
+			if (this.settings.graph.scope !== 'global' || this.settings.graph.minimumConnections > 0 || !this.settings.discovery.includeOrphans) this.queueRefreshView();
+			else for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.refreshRenderLevels();
+		}));
 		this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf) => {
 			if (leaf?.view instanceof SwarmGraphView) leaf.view.scheduleDraw();
 		}));
@@ -2047,6 +2076,10 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.rebuildGraph();
 	}
 
+	queueRefreshView() {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.queueGraphRefresh();
+	}
+
 	refreshSettings() {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.applySettings();
 	}
@@ -2054,6 +2087,9 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 	async setSetting(section, key, value, refreshGraph = false) {
 		if (section === null) this.settings[key] = value;
 		else this.settings[section][key] = value;
+		if (section === 'motion' && ['maxVisibleNodes', 'maxVisibleLinks'].includes(key)) {
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.refreshRenderLevels();
+		}
 		if (section === 'interaction' && ['pathPreview', 'pathStartPath', 'pinnedNodePaths'].includes(key)) {
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) leaf.view.refreshRenderLevels();
 		}
@@ -2127,7 +2163,7 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		if (!file || file.extension !== 'md') return;
 		this.activity.unshift({ kind, name: file.basename, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
 		this.activity = this.activity.slice(0, 30);
-		this.refreshView();
+		this.queueRefreshView();
 	}
 };
 
@@ -2202,6 +2238,9 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 
 		this.section(containerEl, 'Performance', true);
 		this.dropdown(this.currentSection, 'Rendering quality', 'Auto lowers graph detail as vault size or drawing time increases. Balanced and Performance reduce the number of visible notes and animated links for smoother rendering.', 'motion', 'qualityMode', { auto: 'Auto', balanced: 'Balanced', performance: 'Performance' });
+		this.slider(this.currentSection, 'Maximum visible notes', 'Limit drawn notes while keeping the full graph available for search and routes. Important and cluster representative notes are prioritized; Performance may lower this further.', 'motion', 'maxVisibleNodes', 100, 3000, 100);
+		this.slider(this.currentSection, 'Maximum visible links', 'Limit drawn connections to reduce clutter and drawing work. Routes and connections between clusters are prioritized.', 'motion', 'maxVisibleLinks', 50, 2000, 50);
+		this.slider(this.currentSection, 'Animation frame rate', 'Lower this to reduce CPU use during animation. Performance caps animation at 24 FPS. A paused graph redraws only when it changes.', 'motion', 'frameRate', 15, 60, 5);
 		this.toggle(this.currentSection, 'Show FPS', 'Show the current rendering rate in the header.', 'display', 'showFps');
 		this.toggle(this.currentSection, 'Performance metrics', 'Show graph build time, draw time, and active rendering quality in the header.', 'display', 'showPerformanceMetrics');
 

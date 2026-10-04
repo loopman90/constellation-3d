@@ -4,6 +4,19 @@ Constellation 3D turns the links between your Obsidian notes into an interactive
 
 The plugin reads Markdown note paths, modification times, tags, and Obsidian's local resolved links to build the graph and counters. It uses Obsidian's metadata cache for note links and cached tag fields; it does not read note bodies or send vault data to a server. It uses the cached links to find connected notes. It enumerates all Markdown notes only when **Include floating notes** is enabled (off by default) or **Orphan Hunt** is selected, since those features need to find unlinked notes.
 
+## Screenshots
+
+![A focused Star Map view showing connected notes and highlighted cluster nodes.](site/images/star-map-cluster-focus.png)
+
+<p align="center">
+  <img src="site/images/rainbow-cluster-orbits.png" alt="Rainbow-colored note clusters arranged as orbiting groups." width="49%">
+  <img src="site/images/monochrome-network.png" alt="A monochrome view of a dense vault network." width="49%">
+</p>
+<p align="center">
+  <img src="site/images/large-vault-green.png" alt="A large vault graph with green notes and many connections." width="49%">
+  <img src="site/images/large-vault-blue.png" alt="A large vault graph with blue and cyan notes and many connections." width="49%">
+</p>
+
 ## What you can do
 
 - **Explore your graph:** switch between the whole vault, notes around the active note, and the active note's direct neighbors. Set how far local exploration reaches.
@@ -20,7 +33,7 @@ The plugin reads Markdown note paths, modification times, tags, and Obsidian's l
 - **Personalize the view:** use visual presets and color schemes, then adjust labels, node icons, the **FAR / MID / NEAR depth rings**, cluster halos, node size, link thickness, and the FPS display. Turn the whole scene background or its particles off independently.
 - **Disable effects independently:** pause all animation, or turn off moving notes, animated links, route motion, and animated color profiles separately in Control Panel → Motion. This lets camera movement continue while individual effects stay still.
 - **Customize the interface:** turn the header, graph title, node/link totals, Quick Menu, and bottom dashboard on or off. Choose each Quick Menu button and selector independently, then show only the counters and recent changes you want, alongside the existing label, link, icon, depth, and halo controls.
-- **Keep large graphs responsive:** choose **Auto**, **Balanced**, or **Performance** under Control Panel → Performance → Rendering quality. Auto adapts node and link detail to graph size and drawing time; balanced modes keep active, pinned, route, and cluster representative notes visible. Enable **Performance metrics** under Performance to see graph build time, draw time, and the current quality. Search waits briefly until you pause typing before rebuilding the graph. For extra smoothness, pause animation or turn down background particles and link display.
+- **Keep large graphs responsive:** choose **Auto**, **Balanced**, or **Performance** under Control Panel → Performance → Rendering quality. Set **Maximum visible notes**, **Maximum visible links**, and **Animation frame rate** in the same section. These budgets limit drawing while the complete graph remains available for filtering and route lookup; pinned and route notes may exceed the note budget. Auto adapts node and link detail to graph size and drawing time; balanced modes keep active, pinned, route, and cluster representative notes visible. Enable **Performance metrics** under Performance to see graph build time, draw time, and the current quality. Search waits briefly until you pause typing before rebuilding the graph. For extra smoothness, pause animation or turn down background particles and link display.
 - **Arrange the canvas:** drag a note node to reposition it, drag the background to orbit the 3D view, or switch to **Pan mode** to move the whole canvas. Scroll to zoom; **Fit Network** resets the view, while **Optimize View** automatically frames all currently visible notes.
 
 ## Install in Obsidian

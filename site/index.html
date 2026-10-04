@@ -21,6 +21,13 @@
     .button { padding:11px 16px; border-radius:10px; border:1px solid var(--line); text-decoration:none; font-weight:700; background:#151a29 }
     .button.primary { color:#071313; background:var(--cyan); border-color:var(--cyan) }
     main { padding-bottom:70px }
+    .showcase { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:0 auto 42px }
+    .showcase h2 { grid-column:1/-1; margin-bottom:0 }
+    .showcase figure { margin:0; overflow:hidden; border:1px solid var(--line); border-radius:14px; background:#080d0d }
+    .showcase figure:first-of-type { grid-column:1/-1 }
+    .showcase a { display:block; line-height:0 }
+    .showcase img { display:block; width:100%; height:auto }
+    .showcase figcaption { padding:10px 13px; color:var(--muted); font-size:.9rem; line-height:1.45 }
     .notice { padding:16px 18px; border:1px solid #514a76; border-radius:12px; background:#17152a; color:#ddd8ff; margin:0 0 28px }
     .about { margin:0 0 34px }
     .about > p { max-width:760px; margin-bottom:18px }
@@ -41,7 +48,7 @@
     summary { cursor:pointer; font-weight:700 }
     footer { border-top:1px solid var(--line); padding:22px 0 34px; color:var(--muted); font-size:.9rem }
     @media(max-width:720px) { .feature-grid{grid-template-columns:repeat(2,1fr)} }
-    @media(max-width:600px) { header{padding-top:48px}.step{padding:18px 16px 18px 62px}.step:before{left:15px;top:18px}.platforms,.feature-grid{grid-template-columns:1fr} }
+    @media(max-width:600px) { header{padding-top:48px}.step{padding:18px 16px 18px 62px}.step:before{left:15px;top:18px}.showcase,.platforms,.feature-grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -55,6 +62,14 @@
       <a class="button" href="https://github.com/loopman90/constellation-3d/issues">Need help?</a>
     </div>
   </header>
+  <section class="showcase wrap" aria-labelledby="showcase-title">
+    <h2 id="showcase-title">See your vault from a new perspective</h2>
+    <figure><a href="images/star-map-cluster-focus.png" target="_blank" rel="noopener"><img src="images/star-map-cluster-focus.png" alt="A focused Star Map view with a highlighted note cluster." fetchpriority="high"></a><figcaption>Star Map: follow connected notes and spot important nodes inside a cluster.</figcaption></figure>
+    <figure><a href="images/rainbow-cluster-orbits.png" target="_blank" rel="noopener"><img src="images/rainbow-cluster-orbits.png" alt="Rainbow-colored clusters arranged like orbiting groups." loading="lazy"></a><figcaption>Color profiles and cluster movement give each group a distinct look.</figcaption></figure>
+    <figure><a href="images/monochrome-network.png" target="_blank" rel="noopener"><img src="images/monochrome-network.png" alt="A monochrome view of a connected Obsidian vault." loading="lazy"></a><figcaption>Switch to a monochrome palette for a calmer network view.</figcaption></figure>
+    <figure><a href="images/large-vault-green.png" target="_blank" rel="noopener"><img src="images/large-vault-green.png" alt="A large vault graph with green nodes and dense connections." loading="lazy"></a><figcaption>Large-vault views show how notes connect across a broad knowledge base.</figcaption></figure>
+    <figure><a href="images/large-vault-blue.png" target="_blank" rel="noopener"><img src="images/large-vault-blue.png" alt="A large vault graph with blue and cyan nodes and dense connections." loading="lazy"></a><figcaption>Choose a visual style and palette to shape the same note network.</figcaption></figure>
+  </section>
   <main class="wrap">
     <div class="notice"><strong>Before you start:</strong> This is an early community plugin. It is not yet listed in Obsidian's Community Plugins browser, so install it manually below.</div>
     <section class="about" aria-labelledby="about-title">
@@ -66,7 +81,7 @@
         <article class="feature"><h3>22 visual styles</h3><p>Choose Constellation, Timeline Map, Mind Palace, Circuit Minimal, Archive Fog, Focus Lens, Thread Weaver, Research Board, Signal Radar, Matrix Hacker, Star Map, Star System, Aqua Mint, Deep Space, Neon, Minimal, Soft Glow, Neural Bloom, Satellite View, Glass Minimal, Academic Light, or Ink Map. Star System shows notes as stars and folder clusters as planets with orbit rings. Its preset adds galaxy colors, a nebula, and cluster orbit motion.</p></article>
         <article class="feature"><h3>Work with note clusters</h3><p>Group notes by top-level folder, full folder path, or first tag, then arrange groups as spaced islands, a grid, or a spiral. Cross-cluster links are highlighted to make connections between groups easier to follow. Right-click a note to collapse or expand its cluster, isolate that cluster, or hide it.</p></article>
         <article class="feature"><h3>Static or animated camera</h3><p>The default Static Camera stays still until you move it. Choose Spaceflight to move along linked notes while star streaks rush past. Swarm coordinates cluster movement, Chaos gives notes more independent motion, and Blob Order makes clusters breathe and orbit. Moving Notes and Notes Orbit Clusters are also available from the Quick Menu and Control Panel.</p></article>
-        <article class="feature"><h3>Stay responsive in large vaults</h3><p>Choose Auto, Balanced, or Performance under Control Panel → Performance → Rendering quality. Auto lowers visual detail as graph size or draw time grows; active notes, cluster representatives, and route notes remain prioritized. Turn on Performance metrics in the same section to see graph build time, drawing time, and the active quality. Search also waits until you pause typing before rebuilding the graph.</p></article>
+        <article class="feature"><h3>Stay responsive in large vaults</h3><p>Choose Auto, Balanced, or Performance under Control Panel → Performance → Rendering quality. Set maximum visible notes, maximum visible links, and animation frame rate in the same section. Auto lowers visual detail as graph size or draw time grows; active notes, cluster representatives, and route notes remain prioritized. Turn on Performance metrics in the same section to see graph build time, drawing time, and the active quality. Search also waits until you pause typing before rebuilding the graph.</p></article>
         <article class="feature"><h3>Customize the 3D scene</h3><p>Choose Nebula, Aurora, Deep Space Grid, Deep Void, Starfield, Horizon Perspective, Depth Bands, Topographic Contours, Blueprint Grid, Warm Paper, Black, or White backgrounds. FAR, MID, and NEAR perspective rings make depth easier to judge; toggle them under Control Panel → Appearance. Set particle count and color palette, and tune perspective depth, node initials, and cluster halos.</p></article>
         <article class="feature"><h3>Animate links and routes</h3><p>Choose flowing particles, pulses, drawing lines, or moving dashes for real note links, including links between clusters. Keep Link lines enabled; selecting a link animation starts motion automatically. Route previews have their own glow, comet, draw, and moving-dash effects.</p></article>
         <article class="feature"><h3>Turn effects off individually</h3><p>Pause all motion or independently disable moving notes, animated links, route motion, and animated color profiles under Control Panel → Motion. Turn the scene background and background particles off separately under Appearance.</p></article>
