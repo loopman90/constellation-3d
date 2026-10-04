@@ -60,11 +60,12 @@ For the illustrated walkthrough and troubleshooting tips, visit the [installatio
 - Click **Optimize View** to center and scale the currently visible graph. Right-click a note to hide that note or its cluster; use the Control Panel's **Hidden items** section to restore individual items or show everything again.
 - Right-click a note and choose **Collapse cluster** to replace its folder's notes with one summary node. Click the summary or choose **Expand cluster** to restore its notes. Choose **Isolate cluster** to focus on one folder, then right-click it and choose **Show all clusters** to return to the full graph.
 - Use **Start Travel**, **‹**, and **›** for automatic or manual note journeys.
-- Choose **Notes Orbit Clusters** or **Moving Notes** in the Quick Menu to animate note movement; use the **Animation** button to pause or resume it.
+- Choose **Swarm**, **Chaos**, or **Blob Order** in the Quick Menu for additional note movement styles. **Notes Orbit Clusters** and **Moving Notes** are also available; use the **Animation** button to pause or resume movement.
+- Notes can be grouped by top-level folder, full folder path, or first tag. Groups appear as spaced cluster islands by default; choose a grid or spiral under **Control Panel → Graph → Cluster arrangement**. Cross-cluster note links are highlighted so you can follow connections between groups.
 - Click **Note Path** in the Quick Menu, then click a start note and a destination note to highlight the shortest linked route. Click **Clear Path** to remove it. Route highlights remain visible when regular links are hidden.
 - **Animate a route:** choose **Glow**, **Traveling comet**, **Draw the route**, or **Moving dashes** under **Control Panel → Motion → Route animation**. Route motion continues when the general 3D animation is paused; **Reduce motion** pauses it.
 - Click a node to open the note. Right-click for pin, hide, and route-preview actions.
-- Click **Control Panel** in the graph toolbar to adjust Camera, Appearance, Graph, Motion, Discovery, Interface, and Hidden Items settings without opening Obsidian's main settings. The groups are collapsible; Camera and Appearance open first. Plugin configuration is also available under **Settings → Constellation 3D**.
+- Click **Control Panel** in the graph toolbar to adjust Camera, Appearance, Graph, Motion, Discovery, Interface, and Hidden Items settings without opening Obsidian's main settings. The groups are collapsible; Camera, Appearance, and Graph open first. Plugin configuration is also available under **Settings → Constellation 3D**.
 
 ## Releases and development
 

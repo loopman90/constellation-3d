@@ -60,6 +60,7 @@ const DEFAULT_SETTINGS = {
 		minimumConnections: 0,
 		includeFloatingNotes: true,
 		clusterBy: 'top-level',
+		clusterLayout: 'islands',
 		clusterSpacing: 1,
 		noteSpacing: 1,
 	},
@@ -228,11 +229,11 @@ class SwarmGraphView extends ItemView {
 		this.modeSelect.value = this.plugin.settings.mode;
 		this.modeSelect.addEventListener('change', () => this.plugin.setSetting(null, 'mode', this.modeSelect.value, true));
 		this.animationStyleSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-animation-style-select', attr: { 'aria-label': 'Note animation style' } });
-		for (const [value, label] of [['orbit', '3D Camera Orbit'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes']]) {
+		for (const [value, label] of [['orbit', '3D Camera Orbit'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes'], ['swarm', 'Swarm'], ['chaos', 'Chaos'], ['blob-order', 'Blob Order']]) {
 			this.animationStyleSelect.createEl('option', { value, text: label });
 		}
 		this.animationStyleSelect.value = this.plugin.settings.motion.animationStyle;
-		this.animationStyleSelect.title = 'Choose how notes or the camera move. Selecting a mode enables animation. Reduce Motion pauses Moving Notes and Notes Orbit Clusters.';
+		this.animationStyleSelect.title = 'Choose how notes or the camera move. Selecting a mode enables animation. Reduce Motion pauses note movement.';
 		this.animationStyleSelect.addEventListener('change', () => this.plugin.setAnimationStyle(this.animationStyleSelect.value));
 		this.colorSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-color-select', attr: { 'aria-label': 'Color scheme' } });
 		for (const [value, label] of Object.entries(COLOR_SCHEME_OPTIONS)) this.colorSelect.createEl('option', { value, text: label });
@@ -504,10 +505,16 @@ class SwarmGraphView extends ItemView {
 		}
 		const visibleSet = new Set(visibleFiles.map((file) => file.path));
 		let visibleEdges = edges.filter((edge) => visibleSet.has(edge.source) && visibleSet.has(edge.target));
-		const animationStyle = this.plugin.settings.motion.animationStyle;
 		const isolatedClusterName = interaction.isolatedClusterName;
 		const hiddenClusterNames = new Set(interaction.hiddenClusterNames);
 		const clusterNameFor = (file) => {
+			if (graphSettings.clusterBy === 'tag') {
+				const cache = fileCaches.get(file.path) || this.app.metadataCache.getFileCache(file);
+				const frontmatterTags = cache?.frontmatter?.tags;
+				const tag = (cache?.tags || []).map((item) => item.tag.replace(/^#/, ''))[0]
+					|| (Array.isArray(frontmatterTags) ? frontmatterTags[0] : typeof frontmatterTags === 'string' ? frontmatterTags.split(/[,; ]+/)[0] : null);
+				return tag ? tag.replace(/^#/, '') : 'Untagged';
+			}
 			const folders = file.path.split('/').slice(0, -1);
 			if (!folders.length) return 'Vault root';
 			return graphSettings.clusterBy === 'folder' ? folders.join('/') : folders[0];
@@ -520,7 +527,6 @@ class SwarmGraphView extends ItemView {
 		const clusterMembers = new Map(clusterKeys.map((key) => [key, []]));
 		for (const file of visibleFiles) clusterMembers.get(clusterNameFor(file)).push(file);
 		const clusterLocalIndexes = new Map(clusterKeys.map((key) => [key, new Map(clusterMembers.get(key).map((file, index) => [file.path, index]))]));
-		const count = Math.max(visibleFiles.length, 1);
 		const oldestNoteTime = visibleFiles.reduce((oldest, file) => Math.min(oldest, file.stat.mtime), Infinity);
 		const newestNoteTime = visibleFiles.reduce((newest, file) => Math.max(newest, file.stat.mtime), 0);
 		this.timelineRange = [oldestNoteTime, newestNoteTime];
@@ -534,32 +540,33 @@ class SwarmGraphView extends ItemView {
 				x = (progress * 2.5 - 1.25) * graphSettings.noteSpacing;
 				y = (((clusterId - (clusterKeys.length - 1) / 2) * 0.12 * graphSettings.clusterSpacing) + Math.sin(index * 1.7) * 0.035) * graphSettings.noteSpacing;
 				z = Math.min(degree.get(file.path) || 0, 12) * 0.012 * graphSettings.noteSpacing;
-			} else if (animationStyle === 'cluster-orbit' || animationStyle === 'cluster-tour' || this.plugin.settings.visual === 'mind-palace') {
+			} else {
 				const totalClusters = Math.max(clusterKeys.length, 1);
-				const centerY = 1 - ((clusterId + 0.5) / totalClusters) * 2;
-				const centerRing = Math.sqrt(Math.max(0, 1 - centerY * centerY));
-				const centerAngle = clusterId * Math.PI * (3 - Math.sqrt(5));
-				clusterCenterX = Math.cos(centerAngle) * centerRing * 0.46 * graphSettings.clusterSpacing;
-				clusterCenterY = centerY * 0.46 * graphSettings.clusterSpacing;
-				clusterCenterZ = Math.sin(centerAngle) * centerRing * 0.46 * graphSettings.clusterSpacing;
+				const layout = graphSettings.clusterLayout || 'islands';
+				if (layout === 'grid') {
+					const columns = Math.ceil(Math.sqrt(totalClusters));
+					const rows = Math.ceil(totalClusters / columns);
+					clusterCenterX = ((clusterId % columns) - (columns - 1) / 2) * 0.9 * graphSettings.clusterSpacing;
+					clusterCenterY = Math.sin(clusterId * 1.7) * 0.08 * graphSettings.clusterSpacing;
+					clusterCenterZ = (Math.floor(clusterId / columns) - (rows - 1) / 2) * 0.9 * graphSettings.clusterSpacing;
+				} else {
+					const centerY = 1 - ((clusterId + 0.5) / totalClusters) * 2;
+					const centerRing = Math.sqrt(Math.max(0, 1 - centerY * centerY));
+					const centerAngle = clusterId * Math.PI * (3 - Math.sqrt(5));
+					const centerRadius = layout === 'spiral' ? 0.45 + Math.sqrt(clusterId / totalClusters) * 0.9 : 1.12;
+					clusterCenterX = Math.cos(centerAngle) * centerRing * centerRadius * graphSettings.clusterSpacing;
+					clusterCenterY = centerY * centerRadius * graphSettings.clusterSpacing;
+					clusterCenterZ = Math.sin(centerAngle) * centerRing * centerRadius * graphSettings.clusterSpacing;
+				}
 				const members = clusterMembers.get(clusterName) || [];
 				const localIndex = clusterLocalIndexes.get(clusterName).get(file.path) || 0;
-			const localY = 1 - ((localIndex + 0.5) / Math.max(members.length, 1)) * 2;
+				const localY = 1 - ((localIndex + 0.5) / Math.max(members.length, 1)) * 2;
 				const localRing = Math.sqrt(Math.max(0, 1 - localY * localY));
 				const localAngle = localIndex * Math.PI * (3 - Math.sqrt(5));
-				const localRadius = Math.min(0.2, 0.09 + members.length * 0.004) * graphSettings.noteSpacing;
+				const localRadius = Math.min(0.38, 0.18 + Math.sqrt(members.length) * 0.012) * graphSettings.noteSpacing;
 				x = clusterCenterX + Math.cos(localAngle) * localRing * localRadius;
 				y = clusterCenterY + localY * localRadius;
 				z = clusterCenterZ + Math.sin(localAngle) * localRing * localRadius;
-			} else {
-				// Fibonacci sphere distributes notes evenly through a volume.
-				y = 1 - (index / Math.max(count - 1, 1)) * 2;
-				const ring = Math.sqrt(Math.max(0, 1 - y * y));
-				const angle = index * Math.PI * (3 - Math.sqrt(5));
-				const radius = (0.58 + Math.min(degree.get(file.path) || 0, 12) * 0.018) * graphSettings.noteSpacing;
-				x = Math.cos(angle) * ring * radius;
-				y *= radius;
-				z = Math.sin(angle) * ring * radius;
 			}
 			const fileCache = fileCaches.get(file.path) || this.app.metadataCache.getFileCache(file);
 			const frontmatterTags = fileCache?.frontmatter?.tags;
@@ -869,17 +876,37 @@ class SwarmGraphView extends ItemView {
 		if (['signal-radar', 'satellite-view'].includes(this.plugin.settings.visual)) this.drawRadar(ctx, width, height, radius, this.plugin.settings.visual);
 		for (const node of this.nodes) {
 			let nx = node.x; let ny = node.y; let nz = node.z;
-			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'cluster-orbit') {
-				const angle = this.frame * 0.006 + node.clusterId * 0.73;
+			if (motion.animationEnabled && !motion.reduceMotion && ['cluster-orbit', 'swarm', 'blob-order'].includes(motion.animationStyle)) {
+				const angle = this.frame * (motion.animationStyle === 'swarm' ? 0.0022 : 0.006) + node.clusterId * 0.73;
 				const dx = nx - node.clusterCenterX; const dz = nz - node.clusterCenterZ;
-				nx = node.clusterCenterX + dx * Math.cos(angle) - dz * Math.sin(angle);
-				nz = node.clusterCenterZ + dx * Math.sin(angle) + dz * Math.cos(angle);
+				const turnX = dx * Math.cos(angle) - dz * Math.sin(angle);
+				const turnZ = dx * Math.sin(angle) + dz * Math.cos(angle);
+				if (motion.animationStyle === 'swarm') {
+					const phase = this.frame * 0.004 + node.clusterId * 1.9;
+					nx = node.clusterCenterX + turnX + Math.sin(phase) * 0.13;
+					ny += Math.sin(phase * 0.83 + node.phase) * 0.07;
+					nz = node.clusterCenterZ + turnZ + Math.cos(phase * 0.71) * 0.13;
+				} else if (motion.animationStyle === 'blob-order') {
+					const breathe = 1 + Math.sin(this.frame * 0.008 + node.clusterId * 1.4) * 0.18;
+					nx = node.clusterCenterX + turnX * breathe;
+					nz = node.clusterCenterZ + turnZ * breathe;
+					ny = node.clusterCenterY + (ny - node.clusterCenterY) * breathe + Math.sin(this.frame * 0.006 + node.phase) * 0.025;
+				} else {
+					nx = node.clusterCenterX + turnX;
+					nz = node.clusterCenterZ + turnZ;
+				}
 			}
 			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'node-drift') {
 				const drift = motion.nodeDriftStrength;
 				nx += Math.sin(this.frame * 0.012 + node.phase) * drift;
 				ny += Math.cos(this.frame * 0.009 + node.phase) * drift;
 				nz += Math.sin(this.frame * 0.01 + node.phase * 1.7) * drift;
+			}
+			if (motion.animationEnabled && !motion.reduceMotion && motion.animationStyle === 'chaos') {
+				const drift = motion.nodeDriftStrength * 1.8;
+				nx += (Math.sin(this.frame * 0.014 + node.phase) + Math.sin(this.frame * 0.006 + node.phase * 2.3) * 0.45) * drift;
+				ny += (Math.cos(this.frame * 0.011 + node.phase * 1.3) + Math.sin(this.frame * 0.005 + node.phase * 3.1) * 0.4) * drift;
+				nz += (Math.sin(this.frame * 0.012 + node.phase * 1.7) + Math.cos(this.frame * 0.007 + node.phase * 2.1) * 0.45) * drift;
 			}
 			const rx = nx * Math.cos(spin) - nz * Math.sin(spin);
 			const rz = nx * Math.sin(spin) + nz * Math.cos(spin);
@@ -928,8 +955,9 @@ class SwarmGraphView extends ItemView {
 			if (!a || !b) continue;
 			const isRoute = routeEdges.has(`${edge.source}|${edge.target}`) || routeEdges.has(`${edge.target}|${edge.source}`);
 			if (!display.showLinks && !isRoute) continue;
+			const isClusterLink = a.clusterId !== b.clusterId;
 			const isNeighbor = hoveredNode && hoveredNeighborhood.has(edge.source) && hoveredNeighborhood.has(edge.target);
-			const alpha = isRoute ? 0.94 : Math.max(0.025, Math.min(0.5, (0.1 + (a.depth + b.depth) * 0.06 + Math.min(edge.count, 4) * 0.025) * (hoveredNode && !isNeighbor ? 0.25 : 1)));
+			const alpha = isRoute ? 0.94 : Math.max(isClusterLink ? 0.16 : 0.025, Math.min(isClusterLink ? 0.72 : 0.5, (0.1 + (a.depth + b.depth) * 0.06 + Math.min(edge.count, 4) * 0.025 + (isClusterLink ? 0.24 : 0)) * (hoveredNode && !isNeighbor ? 0.25 : 1)));
 			const pathStyle = motion.pathAnimationStyle;
 			ctx.beginPath();
 			ctx.moveTo(a.screenX, a.screenY);
@@ -941,7 +969,7 @@ class SwarmGraphView extends ItemView {
 				ctx.quadraticCurveTo((a.screenX + b.screenX) / 2 + bend, (a.screenY + b.screenY) / 2 - bend, b.screenX, b.screenY);
 			} else ctx.lineTo(b.screenX, b.screenY);
 			const linkColor = this.getNodeColor(a);
-			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
+			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : isClusterLink ? `rgba(190, 225, 255, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
 			const routeMotionEnabled = isRoute && !motion.reduceMotion && pathStyle !== 'static';
@@ -1482,7 +1510,7 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 	async setAnimationStyle(style) {
 		this.settings.motion.animationStyle = style;
 		this.settings.motion.animationEnabled = true;
-		if (this.settings.motion.reduceMotion && ['cluster-orbit', 'node-drift'].includes(style)) {
+		if (this.settings.motion.reduceMotion && ['cluster-orbit', 'node-drift', 'swarm', 'chaos', 'blob-order'].includes(style)) {
 			new Notice('Turn off Reduce Motion to animate notes.');
 		}
 		await this.saveSettings(true);
@@ -1618,6 +1646,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.section(containerEl, 'Graph', true);
 		this.slider(this.currentSection, 'Node distance', 'Set how far apart notes appear in the 3D layouts from 0.1× to 6×.', 'graph', 'noteSpacing', 0.1, 6, 0.1, true);
 		this.slider(this.currentSection, 'Cluster spacing', 'Set folder-cluster distance from 0.1× to 6×. Zoom out for wider spacing.', 'graph', 'clusterSpacing', 0.1, 6, 0.1, true);
+		this.dropdown(this.currentSection, 'Cluster arrangement', 'Arrange folder groups as spaced islands, a grid, or a spiral. Links between notes remain visible across groups.', 'graph', 'clusterLayout', { islands: 'Cluster islands', grid: 'Cluster grid', spiral: 'Cluster spiral' }, null, true);
 		this.dropdown(this.currentSection, 'Scope', 'Show the whole vault or notes around the active note.', 'graph', 'scope', { global: 'Global', local: 'Local', current: 'Current note' }, null, true);
 		this.slider(this.currentSection, 'Local depth', 'Number of link steps around the active note.', 'graph', 'localDepth', 1, 10, 1, true);
 		this.text(this.currentSection, 'Folder filter', 'Comma-separated folder names or path fragments.', 'graph', 'folderFilter', true);
@@ -1625,12 +1654,13 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.dropdown(this.currentSection, 'Date filter', 'Limit notes by their last modified date.', 'graph', 'dateFilter', { all: 'All notes', recent: 'Recently modified', forgotten: 'Long time ago' }, null, true);
 		this.slider(this.currentSection, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
 		this.toggle(this.currentSection, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
-		this.dropdown(this.currentSection, 'Cluster notes by', 'Choose whether clusters follow top-level folders or the complete folder path.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path' }, null, true);
+		this.dropdown(this.currentSection, 'Cluster notes by', 'Group notes by top-level folder, full folder path, or their first tag.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path', tag: 'First tag' }, null, true);
 
 		this.section(containerEl, 'Motion');
 		this.toggle(this.currentSection, 'Animation', 'Rotate and gently move the note space.', 'motion', 'animationEnabled');
-		this.dropdown(this.currentSection, '3D animation style', 'Choose camera orbit, cluster orbit, cluster tour, or moving notes.', 'motion', 'animationStyle', {
+		this.dropdown(this.currentSection, '3D animation style', 'Choose how the camera, clusters, or individual notes move.', 'motion', 'animationStyle', {
 			orbit: '3D camera orbit', 'cluster-orbit': 'Notes orbit clusters', 'cluster-tour': 'Cluster camera tour', 'node-drift': 'Moving notes',
+			swarm: 'Swarm', chaos: 'Chaos', 'blob-order': 'Blob Order',
 		}, (value) => this.plugin.setAnimationStyle(value));
 		this.slider(this.currentSection, 'Animation speed', 'Set the speed of automatic rotation.', 'motion', 'animationSpeed', 0.1, 1.5, 0.05);
 		this.slider(this.currentSection, 'Color animation speed', 'Set how fast animated color schemes cycle.', 'motion', 'colorSpeed', 0.05, 2, 0.05);
