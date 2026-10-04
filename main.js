@@ -1,4 +1,4 @@
-const { Plugin, PluginSettingTab, Setting, ItemView, Menu, Notice } = require('obsidian');
+const { Plugin, PluginSettingTab, Setting, ItemView, Menu, Notice, setIcon } = require('obsidian');
 
 const VIEW_TYPE = 'swarm-console-graph';
 const COLOR_SCHEME_OPTIONS = {
@@ -255,11 +255,15 @@ class SwarmGraphView extends ItemView {
 			this.panButton.setAttribute('aria-pressed', String(this.panMode));
 		});
 		const controls = quickbar.createDiv({ cls: 'swarm-quick-controls' });
-		this.hideQuickbarButton = quickbar.createEl('button', { cls: 'swarm-control-button', text: 'HIDE QUICK MENU' });
+		this.hideQuickbarButton = quickbar.createEl('button', { cls: 'swarm-control-button swarm-icon-button' });
+		setIcon(this.hideQuickbarButton, 'chevron-up');
 		this.hideQuickbarButton.setAttribute('aria-label', 'Hide quick menu');
+		this.hideQuickbarButton.title = 'Hide Quick Menu';
 		this.hideQuickbarButton.addEventListener('click', () => this.setQuickbarVisible(false));
-		this.showQuickbarButton = main.createEl('button', { cls: 'swarm-control-button swarm-show-menu is-hidden', text: 'SHOW QUICK MENU' });
+		this.showQuickbarButton = main.createEl('button', { cls: 'swarm-control-button swarm-icon-button swarm-show-menu is-hidden' });
+		setIcon(this.showQuickbarButton, 'menu');
 		this.showQuickbarButton.setAttribute('aria-label', 'Show quick menu');
+		this.showQuickbarButton.title = 'Show Quick Menu';
 		this.showQuickbarButton.addEventListener('click', () => this.setQuickbarVisible(true));
 		this.canvas = main.createEl('canvas', { cls: 'swarm-canvas' });
 		this.ctx = this.canvas.getContext('2d');

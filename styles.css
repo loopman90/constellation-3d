@@ -42,6 +42,8 @@
 .swarm-control-panel-body .setting-item-control { flex-wrap: wrap; }
 .swarm-control-button { border: 1px solid var(--swarm-border); background: rgba(8,14,20,.76); color: #90a8b3; padding: 7px 9px; font: 9px var(--font-monospace); letter-spacing: .08em; cursor: pointer; }
 .swarm-control-button:hover { border-color: rgba(103,224,221,.55); color: var(--swarm-cyan); }
+.swarm-icon-button { width: 34px; min-width: 34px; height: 32px; padding: 0; display: inline-grid; place-items: center; }
+.swarm-icon-button svg { width: 16px; height: 16px; }
 .swarm-tooltip { position: absolute; z-index: 4; padding: 7px 9px; border: 1px solid rgba(103,224,221,.35); background: rgba(5,9,13,.94); color: #dce9ef; font-size: 10px; pointer-events: none; white-space: nowrap; }
 .swarm-tooltip.is-hidden { display: none; }
 .swarm-footer { flex: 0 0 auto; display: grid; grid-template-columns: repeat(var(--swarm-metric-count, 4), minmax(100px, .7fr)) minmax(220px, 2fr); border-top: 1px solid var(--swarm-border); background: rgba(7, 10, 15, .93); }
