@@ -304,6 +304,9 @@ class SwarmGraphView extends ItemView {
 		this.controlPanelBody = this.controlPanel.createDiv({ cls: 'swarm-control-panel-body' });
 		this.controlSettings = new SwarmConsoleSettingTab(this.app, this.plugin);
 		this.controlSettings.renderSettings(this.controlPanelBody, this);
+		this.keyboardHelp = this.controlPanelBody.createDiv({ cls: 'swarm-keyboard-help' });
+		this.keyboardHelp.createEl('div', { cls: 'swarm-keyboard-help-title', text: 'KEYBOARD CONTROLS' });
+		this.keyboardHelp.createEl('p', { text: '← → rotate · ↑ ↓ tilt · + − zoom · WASD pan · Space pause / play · F fit network · O optimize view · R refresh · Esc close panel' });
 		this.updateControlLabels();
 		this.canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
 		this.canvas.addEventListener('pointerleave', () => this.tooltip.addClass('is-hidden'));
@@ -324,6 +327,7 @@ class SwarmGraphView extends ItemView {
 		}, { passive: false });
 		this.canvas.addEventListener('click', (event) => this.onCanvasClick(event));
 		this.canvas.addEventListener('contextmenu', (event) => this.onCanvasContextMenu(event));
+		this.registerDomEvent(this.containerEl, 'keydown', (event) => this.onKeyboardControl(event));
 
 		const footer = this.root.createDiv({ cls: 'swarm-footer' });
 		this.footer = footer;
@@ -344,6 +348,42 @@ class SwarmGraphView extends ItemView {
 		const open = force ?? this.controlPanel?.hasClass('is-hidden');
 		this.controlPanel?.toggleClass('is-hidden', !open);
 		this.settingsButton?.setAttribute('aria-expanded', String(open));
+	}
+
+	onKeyboardControl(event) {
+		if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+		const target = event.target;
+		if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName))) return;
+		const key = event.key.toLowerCase();
+		const step = event.shiftKey ? 48 : 24;
+		let handled = true;
+		switch (key) {
+		case 'arrowleft': this.manualCameraControl = true; this.rotation -= step * Math.PI / 180; break;
+		case 'arrowright': this.manualCameraControl = true; this.rotation += step * Math.PI / 180; break;
+		case 'arrowup': this.manualCameraControl = true; this.tiltOffset = Math.max(-0.96, this.tiltOffset - step * Math.PI / 180); break;
+		case 'arrowdown': this.manualCameraControl = true; this.tiltOffset = Math.min(0.96, this.tiltOffset + step * Math.PI / 180); break;
+		case '+': case '=': this.zoom = Math.min(12, (this.zoom || 1) * 1.15); break;
+		case '-': case '_': this.zoom = Math.max(0.1, (this.zoom || 1) / 1.15); break;
+		case 'w': this.panY += step; break;
+		case 's': this.panY -= step; break;
+		case 'a': this.panX += step; break;
+		case 'd': this.panX -= step; break;
+		case ' ': void this.plugin.toggleAnimation(); break;
+		case 'f': this.fitNetwork(); break;
+		case 'o': this.optimizeView(); break;
+		case 'r': this.rebuildGraph(); break;
+		case 'escape':
+			if (!this.controlPanel?.hasClass('is-hidden')) this.toggleControlPanel(false);
+			else handled = false;
+			break;
+		default: handled = false;
+		}
+		if (!handled) return;
+		event.preventDefault();
+		if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', '+', '=', '-', '_', 'w', 'a', 's', 'd'].includes(key)) {
+			this.controlSettings?.syncCameraControls();
+			this.scheduleDraw();
+		}
 	}
 
 	updateDisplayVisibility() {

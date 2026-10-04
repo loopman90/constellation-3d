@@ -54,6 +54,9 @@
 .swarm-camera-controls .setting-item-description { display: none; }
 .swarm-camera-controls .setting-item:last-child { padding-bottom: 0; }
 .swarm-hidden-items-manager .setting-item { align-items: center !important; }
+.swarm-keyboard-help { margin: 8px 0 2px; padding: 8px 10px; border: 1px solid var(--swarm-border); border-radius: 6px; color: var(--text-muted, #8295a1); }
+.swarm-keyboard-help-title { color: var(--swarm-cyan); font: 600 9px var(--font-monospace); letter-spacing: .1em; }
+.swarm-keyboard-help p { margin: 5px 0 0; font-size: 10px; line-height: 1.5; }
 @media (max-width: 760px) { .swarm-control-panel { width: min(340px, calc(100% - 20px)); max-height: 82%; } }
 .swarm-control-button { border: 1px solid var(--swarm-border); background: rgba(8,14,20,.76); color: #90a8b3; padding: 7px 9px; font: 9px var(--font-monospace); letter-spacing: .08em; cursor: pointer; }
 .swarm-control-button:hover { border-color: rgba(103,224,221,.55); color: var(--swarm-cyan); }
