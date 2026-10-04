@@ -1148,12 +1148,27 @@ class SwarmGraphView extends ItemView {
 				ctx.stroke();
 				ctx.shadowBlur = 0;
 			}
-			if (display.showLabels && (node.hovered || node.focused || isRouteNode || (!simplifiedRendering && node.degree > 2))) {
-				ctx.font = `${display.labelSize}px var(--font-monospace)`;
-				const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual) || this.plugin.settings.motion.backgroundStyle === 'white';
-				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? `rgba(35,48,55,${Math.max(0.52, 0.66 + node.depth * 0.2)})` : visual === 'matrix-hacker' ? 'rgba(156,255,178,.86)' : `rgba(220, 232, 240, ${Math.max(0.28, 0.48 + node.depth * 0.28)})`;
-				ctx.fillText(node.name.slice(0, 26), node.screenX + nodeRadius + 5, node.screenY + 3);
+		}
+		if (display.showLabels) {
+			const labelStride = Math.max(1, Math.ceil(this.nodes.length / 450));
+			const lightStyle = ['research-board', 'academic-light', 'ink-map'].includes(visual) || motion.backgroundStyle === 'white';
+			ctx.save();
+			ctx.font = `${display.labelSize}px var(--font-monospace)`;
+			ctx.lineWidth = 3;
+			ctx.lineJoin = 'round';
+			ctx.strokeStyle = lightStyle ? 'rgba(255,255,255,.88)' : 'rgba(3,8,12,.88)';
+			for (const node of orderedNodes) {
+				const isRouteNode = routeNodes.has(node.path);
+				if (!node.hovered && !node.focused && !isRouteNode && node.index % labelStride !== 0) continue;
+				const nodeRadius = Math.min(7, 2.1 + Math.sqrt(node.degree) * 0.8) * display.nodeSize * node.perspective;
+				const label = node.name.slice(0, 26);
+				const x = node.screenX + nodeRadius + 5;
+				const y = node.screenY + 3;
+				ctx.fillStyle = node.hovered ? (lightStyle ? '#17222b' : '#fff') : lightStyle ? 'rgba(35,48,55,.82)' : visual === 'matrix-hacker' ? 'rgba(156,255,178,.95)' : 'rgba(220,232,240,.9)';
+				ctx.strokeText(label, x, y);
+				ctx.fillText(label, x, y);
 			}
+			ctx.restore();
 		}
 		const clockSecond = Math.floor(Date.now() / 1000);
 		if (clockSecond !== this.lastClockSecond) {
@@ -1742,7 +1757,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.text(this.currentSection, 'Custom palette colors', 'Enter comma-separated HEX colors.', null, 'customPalette');
 		this.dropdown(this.currentSection, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Deep Space Grid', void: 'Deep Void', black: 'Black', white: 'White' });
 		this.slider(this.currentSection, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
-		this.toggle(this.currentSection, 'Node labels', 'Show note names on the graph.', 'display', 'showLabels');
+		this.toggle(this.currentSection, 'Node labels', 'Show note names. All labels appear in smaller graphs; large graphs sample labels automatically. Hover a note to reveal its name.', 'display', 'showLabels');
 		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
 		this.toggle(this.currentSection, 'Node icons', 'Show the first letter of each note inside its node.', 'display', 'showNodeIcons');
 		this.toggle(this.currentSection, 'Depth layers', 'Draw guide rings to make 3D depth easier to read.', 'display', 'showDepthLayers');
