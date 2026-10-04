@@ -58,7 +58,7 @@ const DEFAULT_SETTINGS = {
 		tagFilter: '',
 		dateFilter: 'all',
 		minimumConnections: 0,
-		includeFloatingNotes: true,
+		includeFloatingNotes: false,
 		clusterBy: 'top-level',
 		clusterLayout: 'islands',
 		clusterSpacing: 1,
@@ -1653,7 +1653,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.text(this.currentSection, 'Tag filter', 'Comma-separated tags from note content or frontmatter.', 'graph', 'tagFilter', true);
 		this.dropdown(this.currentSection, 'Date filter', 'Limit notes by their last modified date.', 'graph', 'dateFilter', { all: 'All notes', recent: 'Recently modified', forgotten: 'Long time ago' }, null, true);
 		this.slider(this.currentSection, 'Minimum connections', 'Hide notes with fewer links than this value.', 'graph', 'minimumConnections', 0, 20, 1, true);
-		this.toggle(this.currentSection, 'Include floating notes', 'Keep notes with no links visible.', 'graph', 'includeFloatingNotes', true);
+		this.toggle(this.currentSection, 'Include floating notes', 'Show notes with no links. Enabling this scans Markdown note paths in the vault.', 'graph', 'includeFloatingNotes', true);
 		this.dropdown(this.currentSection, 'Cluster notes by', 'Group notes by top-level folder, full folder path, or their first tag.', 'graph', 'clusterBy', { 'top-level': 'Top-level folder', folder: 'Full folder path', tag: 'First tag' }, null, true);
 
 		this.section(containerEl, 'Motion');
