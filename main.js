@@ -288,6 +288,7 @@ class SwarmGraphView extends ItemView {
 			this.modeSelect.createEl('option', { value, text: label });
 		}
 		this.modeSelect.value = this.plugin.settings.mode;
+		this.modeSelect.title = 'Choose a discovery route, then press START TRAVEL to follow the notes.';
 		this.modeSelect.addEventListener('change', () => this.plugin.setSetting(null, 'mode', this.modeSelect.value, true));
 		this.animationStyleSelect = quickbar.createEl('select', { cls: 'swarm-select swarm-animation-style-select', attr: { 'aria-label': 'Note animation style' } });
 		for (const [value, label] of [['orbit', '3D Camera Orbit'], ['cluster-orbit', 'Notes Orbit Clusters'], ['cluster-tour', 'Cluster Camera Tour'], ['node-drift', 'Moving Notes'], ['swarm', 'Swarm'], ['chaos', 'Chaos'], ['blob-order', 'Blob Order']]) {
@@ -786,7 +787,7 @@ class SwarmGraphView extends ItemView {
 		this.updatePathControls();
 	}
 
-	toggleJourney() {
+	async toggleJourney() {
 		if (this.journeyTimer) {
 			window.clearInterval(this.journeyTimer);
 			this.journeyTimer = null;
@@ -794,11 +795,17 @@ class SwarmGraphView extends ItemView {
 			return;
 		}
 		if (!this.nodes.length) { new Notice('No notes match the current graph filters.'); return; }
+		const motion = this.plugin.settings.motion;
+		const resumedReducedMotion = motion.reduceMotion;
+		motion.animationEnabled = true;
+		motion.reduceMotion = false;
+		await this.plugin.saveSettings();
+		if (resumedReducedMotion) new Notice('Travel started. Reduce Motion was turned off so the camera and route can animate.');
 		this.journeyNodes = this.buildJourneyOrder();
 		this.journeyIndex = -1;
-		this.stepJourney(1);
 		this.journeyButton?.setText('PAUSE TRAVEL');
 		this.journeyTimer = window.setInterval(() => this.stepJourney(1), Math.max(1, this.plugin.settings.journey.nodePauseSeconds) * 1000);
+		this.stepJourney(1);
 	}
 
 	stepJourney(direction) {
@@ -820,6 +827,32 @@ class SwarmGraphView extends ItemView {
 		if (mode === 'hub-explorer') return nodes.sort((a, b) => b.degree - a.degree).map((node) => node.path);
 		if (mode === 'hidden-gems') return nodes.sort((a, b) => a.degree - b.degree).map((node) => node.path);
 		if (mode === 'orphan-hunt') return nodes.map((node) => node.path);
+		if (mode === 'path-journey') {
+			const visited = new Set();
+			const route = [];
+			const activePath = this.app.workspace.getActiveFile()?.path;
+			const starts = [...nodes].sort((a, b) => a.index - b.index);
+			const activeIndex = starts.findIndex((node) => node.path === activePath);
+			if (activeIndex > 0) starts.unshift(...starts.splice(activeIndex, 1));
+			for (const start of starts) {
+				if (visited.has(start.path)) continue;
+				visited.add(start.path); route.push(start.path);
+				const stack = [{ path: start.path, neighbors: [...(this.adjacency.get(start.path) || [])].sort((a, b) => (this.nodeByPath.get(a)?.index || 0) - (this.nodeByPath.get(b)?.index || 0)), next: 0 }];
+				while (stack.length) {
+					const current = stack[stack.length - 1];
+					while (current.next < current.neighbors.length && visited.has(current.neighbors[current.next])) current.next++;
+					if (current.next >= current.neighbors.length) {
+						stack.pop();
+						if (stack.length) route.push(stack[stack.length - 1].path);
+						continue;
+					}
+					const nextPath = current.neighbors[current.next++];
+					visited.add(nextPath); route.push(nextPath);
+					stack.push({ path: nextPath, neighbors: [...(this.adjacency.get(nextPath) || [])].sort((a, b) => (this.nodeByPath.get(a)?.index || 0) - (this.nodeByPath.get(b)?.index || 0)), next: 0 });
+				}
+			}
+			return route;
+		}
 		const adjacency = new Map(nodes.map((node) => [node.path, []]));
 		for (const edge of this.edges) {
 			adjacency.get(edge.source)?.push(edge.target);
@@ -919,6 +952,7 @@ class SwarmGraphView extends ItemView {
 		const motion = this.plugin.settings.motion;
 		const display = this.plugin.settings.display;
 		const visual = this.plugin.settings.visual;
+		const animationClock = performance.now() * 0.06 * motion.animationSpeed;
 		if (motion.animationEnabled) this.frame += motion.animationSpeed;
 		this.drawBackground(ctx, width, height, motion);
 		const timelineMode = this.plugin.settings.visual === 'timeline-map';
@@ -1008,7 +1042,11 @@ class SwarmGraphView extends ItemView {
 		const routeNodes = new Set();
 		const routeOrder = new Map();
 		let previousRouteNode = null;
-		for (const sourcePath of interaction.pathPreview) {
+		const discoveryRouteActive = Boolean(this.journeyTimer) && ['wander', 'path-journey'].includes(this.plugin.settings.mode);
+		const routeWindowStart = Math.max(0, this.journeyIndex - 80);
+		const journeyRouteWindow = discoveryRouteActive ? this.journeyNodes.slice(routeWindowStart, routeWindowStart + 160) : [];
+		const visibleRoute = interaction.pathPreview.length ? interaction.pathPreview : journeyRouteWindow;
+		for (const sourcePath of visibleRoute) {
 			const displayPath = this.pathDisplayBySource?.get(sourcePath);
 			if (!displayPath || !nodeMap.has(displayPath)) { previousRouteNode = null; continue; }
 			routeNodes.add(displayPath);
@@ -1053,7 +1091,7 @@ class SwarmGraphView extends ItemView {
 			ctx.strokeStyle = isRoute ? `rgba(255, 195, 105, ${alpha})` : isClusterLink ? `rgba(190, 225, 255, ${alpha})` : `rgba(${linkColor}, ${alpha})`;
 			ctx.lineWidth = (0.5 + Math.min(edge.count, 4) * 0.13) * display.edgeThickness * ((a.perspective + b.perspective) / 2);
 			const lineStyle = motion.lineAnimationStyle;
-			const routeMotionEnabled = isRoute && !motion.reduceMotion && pathStyle !== 'static';
+			const routeMotionEnabled = isRoute && motion.animationEnabled && !motion.reduceMotion && pathStyle !== 'static';
 			const useDashes = (animateLine && lineStyle === 'dashes' && motion.animationEnabled && !motion.reduceMotion) || (isRoute && pathStyle === 'dashes' && routeMotionEnabled);
 			if (useDashes) {
 				ctx.setLineDash([5, 7]);
@@ -1064,7 +1102,7 @@ class SwarmGraphView extends ItemView {
 			ctx.shadowBlur = 0;
 			if (!simplifiedRendering || useDashes) ctx.setLineDash([]);
 			if (animateLine && motion.animationEnabled && !motion.reduceMotion && ['flow', 'pulse'].includes(lineStyle)) {
-				const progress = (this.frame * 0.008 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
+				const progress = (animationClock * 0.008 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				const px = a.screenX + (b.screenX - a.screenX) * progress;
 				const py = a.screenY + (b.screenY - a.screenY) * progress;
 				ctx.beginPath();
@@ -1076,7 +1114,7 @@ class SwarmGraphView extends ItemView {
 				ctx.shadowBlur = 0;
 			}
 			if (animateLine && motion.animationEnabled && !motion.reduceMotion && lineStyle === 'draw') {
-				const progress = (this.frame * 0.009 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
+				const progress = (animationClock * 0.009 * motion.connectionPulseSpeed + edge.renderIndex * 0.137) % 1;
 				ctx.beginPath(); ctx.moveTo(a.screenX, a.screenY);
 				ctx.lineTo(a.screenX + (b.screenX - a.screenX) * progress, a.screenY + (b.screenY - a.screenY) * progress);
 				ctx.strokeStyle = `rgba(145, 245, 255, ${Math.min(0.9, alpha + 0.3)})`; ctx.stroke();
@@ -1087,8 +1125,7 @@ class SwarmGraphView extends ItemView {
 				const routeIndex = Math.min(sourceIndex, targetIndex);
 				const forward = sourceIndex >= 0 && sourceIndex < targetIndex;
 				const start = forward ? a : b; const end = forward ? b : a;
-				const routeClock = motion.animationEnabled ? this.frame : performance.now() * 0.06;
-				const phase = (routeClock * 0.004 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
+				const phase = (animationClock * 0.012 * motion.connectionPulseSpeed + Math.max(0, routeIndex) * 0.23) % 1;
 				ctx.beginPath();
 				if (pathStyle === 'draw') {
 					const progress = phase < 0.72 ? phase / 0.72 : 1;
@@ -1208,7 +1245,7 @@ class SwarmGraphView extends ItemView {
 			this.fpsIndicator?.setText('');
 			this.lastFpsLabel = '';
 		}
-		if (motion.animationEnabled || (interaction.pathPreview.length && motion.pathAnimationStyle !== 'static' && !motion.reduceMotion)) this.scheduleDraw();
+		if (motion.animationEnabled) this.scheduleDraw();
 	}
 
 	getNodeColor(node) {
@@ -1679,15 +1716,14 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 
 	async toggleAnimation() {
 		this.settings.motion.animationEnabled = !this.settings.motion.animationEnabled;
+		if (this.settings.motion.animationEnabled) this.settings.motion.reduceMotion = false;
 		await this.saveSettings();
 	}
 
 	async setAnimationStyle(style) {
 		this.settings.motion.animationStyle = style;
 		this.settings.motion.animationEnabled = true;
-		if (this.settings.motion.reduceMotion && ['cluster-orbit', 'node-drift', 'swarm', 'chaos', 'blob-order'].includes(style)) {
-			new Notice('Turn off Reduce Motion to animate notes.');
-		}
+		this.settings.motion.reduceMotion = false;
 		await this.saveSettings(true);
 	}
 
@@ -1695,7 +1731,16 @@ module.exports = class SwarmConsolePlugin extends Plugin {
 		this.settings.motion.lineAnimationStyle = style;
 		if (style !== 'none') {
 			this.settings.motion.animationEnabled = true;
-			if (this.settings.motion.reduceMotion) new Notice('Turn off Reduce Motion to animate note connections.');
+			this.settings.motion.reduceMotion = false;
+		}
+		await this.saveSettings();
+	}
+
+	async setPathAnimationStyle(style) {
+		this.settings.motion.pathAnimationStyle = style;
+		if (style !== 'static') {
+			this.settings.motion.animationEnabled = true;
+			this.settings.motion.reduceMotion = false;
 		}
 		await this.saveSettings();
 	}
@@ -1853,7 +1898,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		this.slider(this.currentSection, 'Moving note distance', 'Set how far individual notes drift.', 'motion', 'nodeDriftStrength', 0.01, 0.5, 0.01);
 		this.slider(this.currentSection, 'Link pulse speed', 'Set the speed of particles moving along note links.', 'motion', 'connectionPulseSpeed', 0.1, 2, 0.1);
 		this.dropdown(this.currentSection, 'Link animation', 'Animate real note connections, including links between clusters. Keep Link lines enabled; choosing a style starts animation.', 'motion', 'lineAnimationStyle', { none: 'Static lines', flow: 'Flowing particles', pulse: 'Link pulses', draw: 'Drawing lines', dashes: 'Moving dashes' }, (value) => this.plugin.setLinkAnimationStyle(value));
-		this.dropdown(this.currentSection, 'Route animation', 'Choose how a route preview is animated.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' });
+		this.dropdown(this.currentSection, 'Route animation', 'Choose how a route preview is animated. Selecting an animated style starts motion.', 'motion', 'pathAnimationStyle', { static: 'Static highlight', glow: 'Glow', comet: 'Traveling comet', draw: 'Draw the route', dashes: 'Moving dashes' }, (value) => this.plugin.setPathAnimationStyle(value));
 		this.slider(this.currentSection, '3D perspective depth', 'Increase or soften the perspective difference between near and far notes.', 'motion', 'perspectiveStrength', 0.2, 2.4, 0.1);
 		this.toggle(this.currentSection, 'Reduce motion', 'Use a calmer camera with less ambient movement.', 'motion', 'reduceMotion');
 		this.toggle(this.currentSection, 'Node glow', 'Show a soft glow around notes.', 'motion', 'glowEnabled');
