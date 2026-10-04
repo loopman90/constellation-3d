@@ -1,7 +1,7 @@
 {
   "id": "constellation-three-d",
   "name": "Constellation 3D",
-  "version": "0.4.40",
+  "version": "0.4.41",
   "minAppVersion": "1.5.0",
   "description": "Explore Markdown note links in an animated 3D graph with clusters, journeys, filters, and visual presets.",
   "author": "loopman90",
