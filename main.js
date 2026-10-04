@@ -1121,8 +1121,9 @@ class SwarmGraphView extends ItemView {
 			'neural-bloom': '#100817', 'satellite-view': '#071017', 'glass-minimal': '#10171c',
 			'academic-light': '#f0efe8', 'soft-glow': '#090d17',
 		};
-		const base = visualBackgrounds[visual] || (style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12');
+		const base = style === 'black' ? '#000000' : style === 'white' ? '#ffffff' : visualBackgrounds[visual] || (style === 'void' ? '#05070c' : style === 'aurora' ? '#07111a' : '#070a12');
 		ctx.fillStyle = base; ctx.fillRect(0, 0, width, height);
+		if (style === 'black' || style === 'white') return;
 		const paperStyle = ['research-board', 'ink-map', 'academic-light'].includes(visual);
 		const flatStyle = ['matrix-hacker', 'circuit-minimal', 'signal-radar', 'star-map', 'satellite-view'].includes(visual);
 		if (visual === 'star-system') {
@@ -1589,7 +1590,7 @@ class SwarmConsoleSettingTab extends PluginSettingTab {
 		}, null, true);
 		this.dropdown(this.currentSection, 'Color scheme', 'Choose a color behavior independently of the visual style.', null, 'colors', COLOR_SCHEME_OPTIONS);
 		this.text(this.currentSection, 'Custom palette colors', 'Enter comma-separated HEX colors.', null, 'customPalette');
-		this.dropdown(this.currentSection, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Star map grid', void: 'Deep void' });
+		this.dropdown(this.currentSection, 'Background style', 'Set the atmosphere behind the 3D note space.', 'motion', 'backgroundStyle', { nebula: 'Nebula', aurora: 'Aurora', grid: 'Deep Space Grid', void: 'Deep Void', black: 'Black', white: 'White' });
 		this.slider(this.currentSection, 'Background particles', 'Set the number of softly animated stars.', 'motion', 'backgroundParticles', 0, 140, 5);
 		this.toggle(this.currentSection, 'Node labels', 'Show note names on the graph.', 'display', 'showLabels');
 		this.toggle(this.currentSection, 'Link lines', 'Show connections between linked notes.', 'display', 'showLinks');
